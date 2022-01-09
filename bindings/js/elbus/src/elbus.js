@@ -1,5 +1,4 @@
-// TODO set buffer size
-// TODO timeouts
+// TODO set buf size
 
 "use strict";
 
@@ -82,6 +81,8 @@ class Client {
     }
     this.name = name;
     this.ping_interval = 1;
+    this.timeout = 5;
+    this.buf_size = 8192;
     this.connected = false;
     this.mgmt_lock = new Mutex();
     this.socket_lock = new Mutex();
@@ -94,6 +95,8 @@ class Client {
     let release = await this.mgmt_lock.acquire();
     try {
       let sock = new net.Socket();
+      sock.setNoDelay(true);
+      sock.setTimeout(this.timeout * 1000);
       this.socket = new PromiseSocket();
       await this.socket.connect(path);
       let header = await this.socket.read(3);
@@ -147,6 +150,11 @@ class Client {
           frame.type = buf[0];
           let frame_len = buf.readInt32LE(1);
           frame.buf = await socket.read(frame_len);
+          if (frame.buf.length != frame_len) {
+            console.log(
+              `Broken elbus frame: ${frame.buf.length} / ${frame_len}`
+            );
+          }
           let i = frame.buf.indexOf(0);
           if (i == -1) {
             throw "Invalid elbus frame";
