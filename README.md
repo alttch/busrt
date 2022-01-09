@@ -1,5 +1,7 @@
 # elbus - Rust-native IPC broker
 
+Note: the project is under development and in alpha stage
+
 ## What is elbus
 
 elbus is a rust-native IPC broker, written in Rust/Tokio, inspired by
@@ -28,9 +30,11 @@ The following channels are supported:
 
 In addition to Rust, elbus has also bindings for the following languages:
 
-* Python (sync): https://pypi.org/project/elbus/
-* Python (async): https://pypi.org/project/elbus-async/
+* Python (sync): <https://pypi.org/project/elbus/>
+* Python (async): <https://pypi.org/project/elbus-async/>
 * JavaScript (Node.js): <https://www.npmjs.com/package/elbus>
+
+Rust crate: <https://crates.io/crates/elbus>
 
 [Protocol description](proto.md)
 
