@@ -28,8 +28,8 @@ The following channels are supported:
 
 In addition to Rust, elbus has also bindings for the following languages:
 
-* Python (sync)
-* Python (async)
+* Python (sync): https://pypi.org/project/elbus/
+* Python (async): https://pypi.org/project/elbus-async/
 * JavaScript (Node.js): <https://www.npmjs.com/package/elbus>
 
 [Protocol description](proto.md)
