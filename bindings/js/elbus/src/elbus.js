@@ -1,6 +1,5 @@
 // TODO set buffer size
 // TODO timeouts
-// TODO package, docs and examples
 
 "use strict";
 
