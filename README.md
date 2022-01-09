@@ -36,7 +36,7 @@ In addition to Rust, elbus has also bindings for the following languages:
 
 Rust crate: <https://crates.io/crates/elbus>
 
-[Protocol description](proto.md)
+[Protocol specification](proto.md)
 
 ### Client registration
 
@@ -64,7 +64,7 @@ An optional included RPC layer for one-to-one messaging can be used. The layer
 is similar to [JSON RPC](https://www.jsonrpc.org/) but is optimized for byte
 communications.
 
-[RPC layer description](rpc-proto.md)
+[RPC layer specification](rpc-proto.md)
 
 ## Security model
 
