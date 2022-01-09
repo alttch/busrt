@@ -5,11 +5,9 @@
 // TODO example: client listener
 // TODO example: rpc client with no handlers
 // TODO example: rpc client with custom handlers
-// TODO move sync python mod to repo
-// TODO move async python mod to repo
 // TODO example: sync python
 // TODO example: async python
-// TODO js client
+// TODO js client (rpc)
 // TODO CLI tool: send messages, listen, send rpc, listen rpc, benchmark
 // TODO broker internal broadcast (topic) events
 // TODO broker info events
