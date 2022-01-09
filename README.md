@@ -64,7 +64,7 @@ An optional included RPC layer for one-to-one messaging can be used. The layer
 is similar to [JSON RPC](https://www.jsonrpc.org/) but is optimized for byte
 communications.
 
-[RPC layer description](rpc.md)
+[RPC layer description](rpc-proto.md)
 
 ## Security model
 
