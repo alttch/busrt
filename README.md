@@ -9,6 +9,9 @@ flexible and very easy to use.
 The library can be embedded in any Rust project or be used as a standalone
 server.
 
+The project web site and documentation is available at <https://elbus.bma.ai/>
+(under construction).
+
 ## Inter-process communication
 
 The following communication patterns are supported out-of-the-box:
@@ -76,3 +79,12 @@ cargo build --features server,broker-api
 The "broker-api" feature is optional. When enabled, it allows to call broker
 internal functions and call RPC procedures from the command line with fifo
 channels.
+
+## About the authors
+
+[Bohemia Automation](https://www.bohemia-automation.com) /
+[Altertech](https://www.altertech.com) is a group of companies with 15+ years
+of experience in the enterprise automation and industrial IoT. Our setups
+include power plants, factories and urban infrastructure. Largest of them have
+1M+ sensors and controlled devices and the bar raises upper and upper every
+day.
