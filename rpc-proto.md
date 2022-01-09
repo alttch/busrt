@@ -1,4 +1,4 @@
-# RPC layer description
+# RPC layer specification
 
 A client can send and receive notifications, incoming calls and replies.
 

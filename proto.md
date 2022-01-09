@@ -1,4 +1,4 @@
-# The protocol description
+# The protocol specification
 
 ## greetings
 
