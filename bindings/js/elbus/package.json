@@ -1,0 +1,25 @@
+{
+  "name": "elbus",
+  "version": "0.0.3",
+  "description": "javascript client for elbus",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alttch/elbus.git"
+  },
+  "main": "src/elbus.js",
+  "keywords": [
+    "elbus",
+    "ipc",
+    "pubsub"
+  ],
+  "author": "Bohemia Automation / Altertech",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/alttch/elbus/issues"
+  },
+  "dependencies": {
+    "async-mutex": "^0.3.2",
+    "promise-socket": "^7.0.0",
+    "sleep-promise": "^9.1.0"
+  }
+}
