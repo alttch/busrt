@@ -27,7 +27,7 @@ In addition to Rust, elbus has also bindings for the following languages:
 
 * Python (sync)
 * Python (async)
-* JavaScript: <https://www.npmjs.com/package/elbus>
+* JavaScript (Node.js): <https://www.npmjs.com/package/elbus>
 
 [Protocol description](proto.md)
 
