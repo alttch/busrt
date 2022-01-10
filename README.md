@@ -66,9 +66,15 @@ communications.
 
 [RPC layer specification](rpc-proto.md)
 
-## Security model
+## Security and reliability model
 
-elbus has ZERO security model in favor of simplicity and speed.
+elbus has ZERO security model in favor of simplicity and speed. Also, elbus is
+not designed to work via unstable connections, all clients should be connected
+either from the local machine or using high-speed reliable local network
+communications.
+
+If you need a pub/sub server for a wide area network, try
+[PSRT](https://github.com/alttch/psrt/).
 
 ## Examples
 
