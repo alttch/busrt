@@ -27,9 +27,11 @@ async function main() {
   console.log(bus.is_connected());
 
   // subscribe to topics
-  let frame = new elbus.Frame(elbus.OP_SUBSCRIBE, 1);
-  frame.topic = ["some/topic1", "topic2"]; // a single topic str or a list
-  let op = await bus.send(frame);
+  let op = bus.subscribe(["some/topic1", "topic2"]); // single topic str or list
+  console.log(await op.wait_completed());
+
+  // unsubscribe from topics
+  let op = bus.unsubscribe(["some/topic1", "topic2"]);
   console.log(await op.wait_completed());
 
   // send one-to-one message

@@ -30,10 +30,9 @@ async function test() {
   bus.on_frame = on_frame;
   //await bus.connect(("localhost", 9924));
   await bus.connect("/tmp/elbus.sock");
-  let frame = new elbus.Frame(elbus.OP_SUBSCRIBE, 1);
-  frame.topic = ["tests", "xxz"];
-  //frame.topic = "xxxz";
-  let op = await bus.send(frame);
+  let op = await bus.subscribe(["tests", "xxz"]);
+  console.log(await op.wait_completed());
+  op = await bus.unsubscribe(["tests", "xxz"]);
   console.log(await op.wait_completed());
   //while (bus.is_connected()) {
   //console.log(bus.is_connected());

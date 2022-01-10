@@ -293,6 +293,16 @@ class Client {
   is_connected() {
     return this.connected;
   }
+  async subscribe(topics) {
+    let frame = new Frame(OP_SUBSCRIBE, 1);
+    frame.topic = topics;
+    return await this.send(null, frame);
+  }
+  async unsubscribe(topics) {
+    let frame = new Frame(OP_UNSUBSCRIBE, 1);
+    frame.topic = topics;
+    return await this.send(null, frame);
+  }
 }
 
 exports.Client = Client;
