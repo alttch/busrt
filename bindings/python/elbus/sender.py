@@ -14,8 +14,8 @@ a = ap.parse_args()
 
 name = a.NAME
 target = a.TARGET
-# bus = elbus.client.Client('/tmp/elbus.sock', name)
-bus = elbus.client.Client('localhost:9924', name)
+bus = elbus.client.Client('/tmp/elbus.sock', name)
+# bus = elbus.client.Client('localhost:9924', name)
 rpc = elbus.rpc.Rpc(bus)
 # bus.on_message = on_message
 bus.connect()
