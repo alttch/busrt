@@ -2,7 +2,7 @@
 
 JavaScript client for [elbus](https://elbus.bma.ai/)
 
-Client example:
+## Client example
 
 ```javascript
 const elbus = require("elbus");
@@ -20,11 +20,13 @@ async function main() {
   let bus = new elbus.Client("js");
   bus.on_disconnect = on_disconnect;
   bus.on_frame = on_frame;
-  await bus.connect("/tmp/elbus.sock");
+  bus.timeout = 5; // seconds
+  await bus.connect("/tmp/elbus.sock"); // local IPC, faster
+  // await bus.connect(("localhost", 9924)); // TCP, slower
 
   // subscribe to topics
   let frame = new elbus.Frame(elbus.OP_SUBSCRIBE, 1);
-  frame.topic = ["some/topic1", "topic2"];
+  frame.topic = ["some/topic1", "topic2"]; // a single topic str or a list
   let op = await bus.send(frame);
   console.log(await op.wait_completed());
 
@@ -40,3 +42,7 @@ async function main() {
 
 main()
 ```
+
+## RPC example
+
+coming soon

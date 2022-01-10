@@ -28,18 +28,19 @@ async function test() {
   let bus = new elbus.Client("js");
   bus.on_disconnect = disconnected;
   bus.on_frame = on_frame;
+  //await bus.connect(("localhost", 9924));
   await bus.connect("/tmp/elbus.sock");
   let frame = new elbus.Frame(elbus.OP_SUBSCRIBE, 1);
   frame.topic = ["tests", "xxz"];
   //frame.topic = "xxxz";
   let op = await bus.send(frame);
   console.log(await op.wait_completed());
-  //while (bus.is_connected()) {
-    //console.log(bus.is_connected());
-    //await sleep(1000);
-  //}
-  //return;
-  let iters = 100_000;
+  while (bus.is_connected()) {
+  console.log(bus.is_connected());
+  await sleep(1000);
+  }
+  return;
+  let iters = 200_000;
   let msg = new elbus.Frame(elbus.OP_MESSAGE, 0);
   msg.payload = Buffer.from("hello");
   let start = new Date().getTime() / 1000;

@@ -96,8 +96,8 @@ class Client {
     try {
       let sock = new net.Socket();
       sock.setNoDelay(true);
-      sock.setTimeout(this.timeout * 1000);
-      this.socket = new PromiseSocket();
+      this.socket = new PromiseSocket(sock);
+      this.socket.setTimeout(this.timeout * 1000);
       await this.socket.connect(path);
       let header = await this.socket.read(3);
       if (header[0] != GREETINGS) {
