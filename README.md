@@ -44,6 +44,9 @@ A client should register with a name "group.subgroup.client" (subgroups are
 optional). The client's name can not start with dot (".", reserved for internal
 broker clients) if registered via IPC.
 
+The client's name must be unique, otherwise the broker refuses the
+registration.
+
 ### Broadcasts
 
 Broadcast messages are sent to multiple clients at once. Use "?" for any part
