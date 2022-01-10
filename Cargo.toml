@@ -1,6 +1,6 @@
 [package]
 name = "elbus"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 authors = ["Sergei S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -9,6 +9,12 @@ description = "Local and network IPC bus"
 readme = "README.md"
 keywords = ["bus", "ipc", "pubsub"]
 autoexamples = false
+
+[package.metadata.docs.rs]
+features = ["broker-api", "ipc", "rpc"]
+
+[package.metadata.playground]
+features = ["broker-api", "ipc", "rpc"]
 
 [dependencies]
 tokio = { version = "1.15.0", features = ["full"] }
@@ -38,12 +44,6 @@ broker-api = ["serde", "broker", "rpc"]
 ipc = ["log", "async-trait"]
 rpc = ["log", "rmp-serde", "async-trait", "serde_json"]
 serialization = ["serde"]
-
-[package.metadata.docs.rs]
-features = ["broker-api", "ipc", "rpc"]
-
-[package.metadata.playground]
-features = ["broker-api", "ipc", "rpc"]
 
 [lib]
 name = "elbus"
