@@ -1,7 +1,6 @@
 // TODO example: client
 // TODO example: client listener
 // TODO example: rpc client with no handlers
-// TODO example: rpc client with custom handlers
 // TODO example: sync python
 // TODO example: async python
 // TODO js client (rpc)

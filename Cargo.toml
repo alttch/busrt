@@ -33,10 +33,10 @@ serde_json = { version = "1.0.74", optional = true }
 [features]
 server = ["log", "syslog", "chrono", "colored", "clap", "clap_derive",
           "lazy_static", "jemallocator", "fork", "broker"]
-broker = ["log", "submap", "async-trait"]
-broker-api = ["serde", "serde_json", "rmp-serde", "unix-named-pipe", "broker"]
+broker = ["log", "submap", "async-trait", "unix-named-pipe"]
+broker-api = ["serde", "broker", "rpc"]
 ipc = ["log", "async-trait"]
-rpc = ["log", "rmp-serde", "async-trait"]
+rpc = ["log", "rmp-serde", "async-trait", "serde_json"]
 serialization = ["serde"]
 
 [package.metadata.docs.rs]
@@ -55,9 +55,13 @@ path = "src/server.rs"
 required-features = ["server"]
 
 [[example]]
-name = "broker_regular"
+name = "inter_thread"
 required-features = ["broker"]
 
 [[example]]
 name = "broker_custom_rpc"
 required-features = ["broker", "rpc", "serialization"]
+
+[[example]]
+name = "client_rpc_handler"
+required-features = ["ipc", "rpc", "serialization"]

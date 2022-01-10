@@ -1,12 +1,14 @@
-use async_trait::async_trait;
 /// Demo of custom broker internal RPC
 /// Do not build with "broker-api" feature
+use async_trait::async_trait;
 use elbus::broker::{Broker, BROKER_NAME};
 use elbus::client::AsyncClient;
 use elbus::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::{Frame, QoS};
 use serde::Deserialize;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio::time::sleep;
 
 struct MyHandlers {}
@@ -66,10 +68,16 @@ async fn main() {
     // create handlers object
     let handlers = MyHandlers {};
     // create RPC
-    let core_rpc = RpcClient::new(core_client, handlers);
+    let crpc = RpcClient::new(core_client, handlers);
     println!("Waiting for frames to {}", BROKER_NAME);
+    // set broker client, optional, allows to spawn fifo servers, the client need to be wrapped in
+    // Arc<Mutex<_>> as it is cloned for each fifo spawned
+    let core_rpc = Arc::new(Mutex::new(crpc));
+    broker.set_core_rpc_client(core_rpc.clone());
+    // test it with echo .broker .hello > /tmp/elbus.fifo
+    broker.spawn_fifo("/tmp/elbus.fifo", 8192).await.unwrap();
     // this is the internal client, it will be connected forever
-    while core_rpc.is_connected() {
+    while core_rpc.lock().await.is_connected() {
         sleep(Duration::from_secs(1)).await;
     }
 }
