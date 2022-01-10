@@ -43,3 +43,10 @@ pub trait AsyncClient: Send + Sync {
     fn get_connected_beacon(&self) -> Option<Arc<atomic::AtomicBool>>;
     fn get_timeout(&self) -> Option<Duration>;
 }
+
+#[macro_export]
+macro_rules! empty_payload {
+    () => {
+        $crate::borrow::Cow::Borrowed(&[])
+    }
+}
