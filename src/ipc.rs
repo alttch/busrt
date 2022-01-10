@@ -58,6 +58,8 @@ pub struct Config {
 }
 
 impl Config {
+    /// path - /path/to/socket (must end with .sock .socket or .ipc) or host:port,
+    /// name - an unique client name
     pub fn new(path: &str, name: &str) -> Self {
         Self {
             path: path.to_owned(),
