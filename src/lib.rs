@@ -1,6 +1,3 @@
-// TODO example: broker with built-in api
-// TODO example: broker with custom api
-// TODO example: broker with thread-to-thread communications
 // TODO example: client
 // TODO example: client listener
 // TODO example: rpc client with no handlers

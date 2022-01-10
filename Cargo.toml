@@ -37,6 +37,7 @@ broker = ["log", "submap", "async-trait"]
 broker-api = ["serde", "serde_json", "rmp-serde", "unix-named-pipe", "broker"]
 ipc = ["log", "async-trait"]
 rpc = ["log", "rmp-serde", "async-trait"]
+serialization = ["serde"]
 
 [package.metadata.docs.rs]
 features = ["broker-api", "ipc", "rpc"]
@@ -53,7 +54,10 @@ name = "elbusd"
 path = "src/server.rs"
 required-features = ["server"]
 
-#[[bin]]
-#name = "test"
-#path = "src/test.rs"
-#required-features = ["broker"]
+[[example]]
+name = "broker_regular"
+required-features = ["broker"]
+
+[[example]]
+name = "broker_custom_rpc"
+required-features = ["broker", "rpc", "serialization"]
