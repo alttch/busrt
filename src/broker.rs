@@ -11,7 +11,7 @@ use std::time::Duration;
 use submap::{BroadcastMap, SubMap};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream, UnixListener, UnixStream};
-#[cfg(feature = "broker-api")]
+#[cfg(feature = "rpc")]
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
@@ -29,8 +29,10 @@ use crate::client::AsyncClient;
 use crate::{EventChannel, OpConfirm};
 use crate::{Frame, FrameData, FrameKind, FrameOp, QoS};
 
+#[cfg(feature = "rpc")]
+use crate::rpc::{Rpc, RpcClient};
 #[cfg(feature = "broker-api")]
-use crate::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
+use crate::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
 
 use async_trait::async_trait;
 
@@ -420,7 +422,7 @@ pub struct Broker {
     db: Arc<BrokerDb>,
     services: Vec<JoinHandle<()>>,
     queue_size: usize,
-    #[cfg(feature = "broker-api")]
+    #[cfg(feature = "rpc")]
     rpc_client: Option<Arc<Mutex<RpcClient>>>,
 }
 
@@ -580,7 +582,7 @@ impl Broker {
             db: broker_db,
             services: <_>::default(),
             queue_size: 0,
-            #[cfg(feature = "broker-api")]
+            #[cfg(feature = "rpc")]
             rpc_client: None,
         };
         // avoid warning if rpc feature is not set
@@ -598,6 +600,10 @@ impl Broker {
     }
     pub fn set_queue_size(&mut self, queue_size: usize) {
         self.queue_size = queue_size;
+    }
+    #[cfg(feature = "rpc")]
+    pub fn set_core_rpc_client(&mut self, client: Arc<Mutex<RpcClient>>) {
+        self.rpc_client.replace(client);
     }
     pub fn register_client(&self, name: &str) -> Result<Client, Error> {
         let (c, rx) =
@@ -654,12 +660,22 @@ impl Broker {
         Ok(())
     }
     #[allow(clippy::items_after_statements)]
-    #[cfg(feature = "broker-api")]
+    /// Broker fifo channel is useful for shell scripts and allows to send:
+    ///
+    /// echo TARGET MESSAGE > /path/to/fifo # a one-to-one or broadcast message
+    /// echo '=TOPIC' MESSAGE # publish to a topic
+    /// echo TARGET .MESSAGE # RPC notification
+    /// echo TARGET :method param=value param=value # RPC call, the payload will be sent as msgpack
+    ///
+    /// Requires either broker-api feature or rpc feature + broker core rpc client to be set
+    #[cfg(feature = "rpc")]
     pub async fn spawn_fifo(&mut self, path: &str, buf_size: usize) -> Result<(), Error> {
         let rpc_client = if let Some(ref c) = self.rpc_client {
             c.clone()
         } else {
-            return Err(Error::not_supported("broker RPC not initialized"));
+            return Err(Error::not_supported(
+                "broker core RPC client not initialized",
+            ));
         };
         let _r = tokio::fs::remove_file(path).await;
         unix_named_pipe::create(path, Some(0o622))?;
@@ -692,7 +708,7 @@ impl Broker {
         self.services.push(service);
         Ok(())
     }
-    #[cfg(feature = "broker-api")]
+    #[cfg(feature = "rpc")]
     async fn send_fifo_cmd(rpc: &Arc<Mutex<RpcClient>>, line: String) -> Result<(), Error> {
         let cmd = line.trim();
         // topic
