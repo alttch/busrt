@@ -65,3 +65,7 @@ required-features = ["broker", "rpc", "serialization"]
 [[example]]
 name = "client_rpc_handler"
 required-features = ["ipc", "rpc", "serialization"]
+
+[[example]]
+name = "client_rpc"
+required-features = ["ipc", "rpc"]

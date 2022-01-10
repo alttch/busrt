@@ -1,4 +1,7 @@
 /// Demo of client RPC handler
+///
+/// use client_rpc example to test client/server, don't forget to launch a standalone broker server
+/// instance
 use async_trait::async_trait;
 use elbus::client::AsyncClient;
 use elbus::ipc::{Client, Config};
