@@ -35,11 +35,11 @@ async function test() {
   //frame.topic = "xxxz";
   let op = await bus.send(frame);
   console.log(await op.wait_completed());
-  while (bus.is_connected()) {
-  console.log(bus.is_connected());
-  await sleep(1000);
-  }
-  return;
+  //while (bus.is_connected()) {
+  //console.log(bus.is_connected());
+  //await sleep(1000);
+  //}
+  //return;
   let iters = 200_000;
   let msg = new elbus.Frame(elbus.OP_MESSAGE, 0);
   msg.payload = Buffer.from("hello");
@@ -53,7 +53,7 @@ async function test() {
   let speed = Math.round(iters / elapsed);
   console.log(speed, "iters/s");
   console.log(Math.round(1_000_000 / speed), "us per iter");
-  bus.disconnect();
+  await bus.disconnect();
 }
 
 test();
