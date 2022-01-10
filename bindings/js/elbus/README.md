@@ -20,9 +20,11 @@ async function main() {
   let bus = new elbus.Client("js");
   bus.on_disconnect = on_disconnect;
   bus.on_frame = on_frame;
-  bus.timeout = 5; // seconds
+  bus.timeout = 5; // seconds, default is 5
+  bus.ping_interval = 1; // seconds, default is 1, must be lower than timeout
   await bus.connect("/tmp/elbus.sock"); // local IPC, faster
   // await bus.connect(("localhost", 9924)); // TCP, slower
+  console.log(bus.is_connected());
 
   // subscribe to topics
   let frame = new elbus.Frame(elbus.OP_SUBSCRIBE, 1);
