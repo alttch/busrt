@@ -39,7 +39,7 @@ async function main() {
   console.log(await op.wait_completed());
 
   // disconnect
-  bus.disconnect();
+  await bus.disconnect();
 }
 
 main()
