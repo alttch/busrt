@@ -211,7 +211,7 @@ class Client {
         }
         let flags = frame.type | (frame.qos << 6);
         if (frame.type == OP_SUBSCRIBE || frame.type == OP_UNSUBSCRIBE) {
-          let payload = Buffer.alloc(0);
+          let payload;
           if (Array.isArray(frame.topic)) {
             let p = [];
             frame.topic.map((v) => {
