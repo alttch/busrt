@@ -38,6 +38,7 @@ pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 
 pub const BROKER_INFO_TOPIC: &str = ".broker/info";
 pub const BROKER_WARN_TOPIC: &str = ".broker/warn";
+pub const BROKER_NAME: &str = ".broker";
 
 macro_rules! pretty_error {
     ($name: expr, $err:expr) => {
@@ -587,7 +588,7 @@ impl Broker {
         #[cfg(feature = "broker-api")]
         {
             let client = broker
-                .register_client(".broker")
+                .register_client(BROKER_NAME)
                 .expect("can not register broker RPC");
             let handlers = BrokerRpcHandlers { db: broker_db };
             let rpc_client = RpcClient::new(client, handlers);
@@ -608,6 +609,10 @@ impl Broker {
             db: self.db.clone(),
             rx: Some(rx),
         })
+    }
+    #[inline]
+    pub fn unregister_client(&self, client: &Client) {
+        self.db.unregister_client(&client.client);
     }
     pub async fn spawn_unix_server(
         &mut self,
