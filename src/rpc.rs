@@ -93,6 +93,10 @@ impl RpcEvent {
             .unwrap(),
         )
     }
+    #[inline]
+    pub fn is_response_required(&self) -> bool {
+        self.id() != 0
+    }
     /// # Panics
     ///
     /// Should not panic
