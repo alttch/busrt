@@ -2,6 +2,8 @@
 
 Note: the project is under development and in alpha stage
 
+<https://elbus.bma.ai/>
+
 ## What is elbus
 
 elbus is a rust-native IPC broker, written in Rust/Tokio, inspired by
@@ -10,9 +12,6 @@ flexible and very easy to use.
 
 The library can be embedded in any Rust project or be used as a standalone
 server.
-
-The project web site and documentation is available at <https://elbus.bma.ai/>
-(under construction).
 
 ## Documentation
 
