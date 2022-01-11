@@ -1,5 +1,3 @@
-// TODO set buf size
-
 "use strict";
 
 const GREETINGS = 0xeb;
@@ -23,6 +21,11 @@ const ERR_NOT_SUPPORTED = 0x75;
 const ERR_BUSY = 0x76;
 const ERR_NOT_DELIVERED = 0x77;
 const ERR_TIMEOUT = 0x78;
+
+const RPC_NOTIFICATION = 0x00;
+const RPC_REQUEST = 0x01;
+const RPC_REPLY = 0x11;
+const RPC_ERROR = 0x12;
 
 const net = require("net");
 const sleep = require("sleep-promise");
@@ -74,6 +77,94 @@ class ClientFrame {
   }
 }
 
+class RpcCallEvent {
+  constructor() {
+    this.completed = new Mutex();
+  }
+  is_completed() {
+    return this.frame !== undefined || this.error !== undefined;
+  }
+  async lock_event() {
+    this.release = await this.lock.acquire();
+  }
+  async wait_completed() {
+    let r = await self.lock.acquire();
+    r();
+    if (this.error) {
+      throw this.error;
+    } else {
+      return this;
+    }
+  }
+  get_payload() {
+    return this.frame.payload.slice(5);
+  }
+}
+
+class RpcEvent {
+  constructor(tp, frame, payload_pos) {
+    this.tp = tp;
+    this.frame = frame;
+    this.payload_pos = payload_pos;
+  }
+  get_payload() {
+    return this.frame.payload.slice(this.payload_pos);
+  }
+}
+
+class RpcNotification {
+  constructor(payload) {
+    this.payload = payload;
+    this.qos = 1;
+    this.header = Buffer.from([RPC_NOTIFICATION]);
+    this.type = OP_MESSAGE;
+  }
+}
+
+class RpcRequest {
+  constructor(method, params) {
+    this.payload = params;
+    this.qos = 1;
+    this.method = Buffer.from(method, "utf8");
+    this.type = OP_MESSAGE;
+  }
+}
+
+class RpcReply {
+  constructor(method, result) {
+    this.payload = result;
+    this.qos = 1;
+    this.method = Buffer.from(method, "utf8");
+    this.type = OP_MESSAGE;
+  }
+}
+
+class Rpc {
+  constructor(client) {
+    this.client = client;
+    this.client.on_frame = this._handle_frame;
+    this.call_id = 0;
+    this.call_lock = new Mutex();
+    this.calls = {};
+  }
+  is_connected() {
+    return this.client.connected;
+  }
+  async notify(target, notification) {
+    return await this.client.send(target, notification);
+  }
+  async call0(target, request) {
+    request.header = Buffer.concat([
+      Buffer.from([RPC_REQUEST, 0, 0, 0, 0]),
+      request.method,
+      Buffer.alloc(1)
+    ]);
+    return await this.client.send(target, request);
+  }
+  // TODO call
+  // TODO handle_frame
+}
+
 class Client {
   constructor(name) {
     if (name === undefined) {
@@ -82,7 +173,6 @@ class Client {
     this.name = name;
     this.ping_interval = 1;
     this.timeout = 5;
-    this.buf_size = 8192;
     this.connected = false;
     this.mgmt_lock = new Mutex();
     this.socket_lock = new Mutex();
@@ -307,6 +397,10 @@ class Client {
 
 exports.Client = Client;
 exports.Frame = Frame;
+
+exports.Rpc = Rpc;
+exports.RpcNotification = RpcNotification;
+exports.RpcRequest = RpcRequest;
 
 exports.OP_PUBLISH = OP_PUBLISH;
 exports.OP_SUBSCRIBE = OP_SUBSCRIBE;
