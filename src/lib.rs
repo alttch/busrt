@@ -9,8 +9,8 @@
 // TODO tests
 // TODO rpc tests
 // TODO bus rpc: stats
+// TODO more docs
 // TODO release
-// TODO release python libs
 use std::fmt;
 use std::sync::Arc;
 
