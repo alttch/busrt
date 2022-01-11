@@ -34,6 +34,7 @@ The following channels are supported:
     :caption: Technical documentation
     :maxdepth: 1
 
+    Broker <broker>
     Protocol specification <protocol>
     RPC layer specification <rpc-protocol>
 
