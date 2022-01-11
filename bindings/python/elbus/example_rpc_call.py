@@ -5,8 +5,6 @@ name = 'test.client.python.sync.rpc.caller'
 # create new elbus client and connect
 bus = elbus.client.Client('/tmp/elbus.sock', name)
 bus.connect()
-# subscribe to all topics
-bus.subscribe('#').wait_completed()
 # init rpc
 rpc = elbus.rpc.Rpc(bus)
 params = {'hello': 123}
