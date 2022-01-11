@@ -81,7 +81,6 @@ def on_notification(event):
 # RPC call handler
 def on_call(event):
     # consider payload is encoded in msgpack
-    import msgpack
     print('Call:', event.frame.sender, event.method,
           msgpack.loads(event.get_payload(), raw=False))
     # msgpack reply
