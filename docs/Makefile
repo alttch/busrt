@@ -54,7 +54,6 @@ clean:
 
 .PHONY: html
 html:
-	pandoc --from=markdown --to=rst --output=readme.rst ../README.md
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."

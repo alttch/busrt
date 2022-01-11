@@ -1,7 +1,8 @@
 elbus protocol specification
 ****************************
 
-## greetings
+Greetings
+=========
 
 server: EB 01 00
 
@@ -13,7 +14,8 @@ client: XX XX (len) ID (string-utf8-bytes)
 
 server: 01 (OK) or XX (error code) and closes the connection
 
-## outgoing frames
+Outgoing frames
+===============
 
 client: XX XX XX XX (OP-ID-CUSTOM) FLAGS XX XX XX XX (frame len) TARGET 00 PAYLOAD
 
@@ -22,14 +24,15 @@ processed)
 
 Operations:
 
-0 - NOP
-1 - publish to topic, target = topic
-2 - subscribe to topic(s), no target required
-3 - unsubscribe from topic(s), no target required
-0x12 - direct message
-0x13 - broadcast message
+* 0 - NOP (ping)
+* 1 - publish to topic, target = topic
+* 2 - subscribe to topic(s), no target required
+* 3 - unsubscribe from topic(s), no target required
+* 0x12 - direct message
+* 0x13 - broadcast message
 
-## pings
+Pings (keep-alive frames)
+=========================
 
 client: XX XX XX XX 00 XX XX XX XX
 
@@ -38,30 +41,28 @@ where XX - any bytes (so 0x00 * 9 is fine)
 the client should ping the server to make sure the connection is alive. the
 server may ping the client, no reply is required.
 
-## incoming frames
+Incoming frames
+===============
 
 first 6 bytes:
 
-0 - frame type
-1 - frame len or op id
-2
-3
-4
-5 - reserved or ack result
+* 0 - frame type
+* 1-4 - frame len or op id
+* 5 - reserved or ack result
 
-## acknowledgements
+Acknowledgements
+----------------
 
 The server sends acks for all operations with QoS > 0
 
 server: FE XX XX XX XX (OP-ID-CUSTOM) 01 (OK) or error code
 
-## messages
+Messages
+--------
 
-server: OP XX XX XX XX 00 (frame len) SENDER 00 PAYLOAD 
+server: 0x12/0x13 XX XX XX XX 00 (frame len) SENDER 00 PAYLOAD 
 
-## topics
+Topic publications
+------------------
 
-server: OP XX XX XX XX 00 (frame len) SENDER 00 TOPIC 00 PAYLOAD 
-
-topics starting with "!bus" are considered as system and all clients are
-subscribed to them automatically.
+server: 01 XX XX XX XX 00 (frame len) SENDER 00 TOPIC 00 PAYLOAD 

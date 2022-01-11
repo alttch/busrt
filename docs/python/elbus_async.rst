@@ -1,5 +1,5 @@
-elbus Python module (async)
-***************************
+elbus Python client module (async)
+**********************************
 
 `<https://pypi.org/project/elbus_async>`_
 

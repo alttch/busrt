@@ -1,5 +1,5 @@
-elbus Python module (sync)
-**************************
+elbus Python client module (sync)
+*********************************
 
 `<https://pypi.org/project/elbus>`_
 
