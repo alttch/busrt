@@ -69,3 +69,11 @@ required-features = ["ipc", "rpc", "serialization"]
 [[example]]
 name = "client_rpc"
 required-features = ["ipc", "rpc"]
+
+[[example]]
+name = "client_listener"
+required-features = ["ipc"]
+
+[[example]]
+name = "client_sender"
+required-features = ["ipc"]

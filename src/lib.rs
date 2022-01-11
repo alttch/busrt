@@ -1,5 +1,3 @@
-// TODO example: client
-// TODO example: client listener
 // TODO example: sync python
 // TODO example: async python
 // TODO js client (rpc)
