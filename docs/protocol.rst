@@ -1,4 +1,5 @@
-# The protocol specification
+elbus protocol specification
+****************************
 
 ## greetings
 
@@ -52,7 +53,7 @@ first 6 bytes:
 
 The server sends acks for all operations with QoS > 0
 
-server: FE XX XX XX XX (OP_-ID-CUSTOM) 01 (OK) or error code
+server: FE XX XX XX XX (OP-ID-CUSTOM) 01 (OK) or error code
 
 ## messages
 

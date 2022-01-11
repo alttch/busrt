@@ -14,6 +14,10 @@ server.
 The project web site and documentation is available at <https://elbus.bma.ai/>
 (under construction).
 
+## Documentation
+
+Available at <https://elbus.readthedocs.io/>
+
 ## Inter-process communication
 
 The following communication patterns are supported out-of-the-box:
@@ -35,8 +39,6 @@ In addition to Rust, elbus has also bindings for the following languages:
 * JavaScript (Node.js): <https://www.npmjs.com/package/elbus>
 
 Rust crate: <https://crates.io/crates/elbus>
-
-[Protocol specification](proto.md)
 
 ### Client registration
 
@@ -67,8 +69,6 @@ An optional included RPC layer for one-to-one messaging can be used. The layer
 is similar to [JSON RPC](https://www.jsonrpc.org/) but is optimized for byte
 communications.
 
-[RPC layer specification](rpc-proto.md)
-
 ## Security and reliability model
 
 elbus has ZERO security model in favor of simplicity and speed. Also, elbus is
@@ -81,7 +81,7 @@ If you need a pub/sub server for a wide area network, try
 
 ## Examples
 
-See [examples](https://github.com/alttch/elbus/examples/) folder.
+See [examples](https://github.com/alttch/elbus/tree/main/examples) folder.
 
 ## Build a stand-alone server
 
