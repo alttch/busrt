@@ -9,6 +9,21 @@ the broker using inter-process communications (UNIX sockets or TCP).
 
 elbus broker is currently implemented in Rust only.
 
+Stand-alone broker server
+=========================
+
+To build a stand-alone broker server, use the command:
+
+.. code:: shell
+    
+    cargo build --features server,broker-api
+
+The *broker-api* feature is optional. When enabled, it allows to call broker
+default internal functions.
+
+Embedded broker
+===============
+
 Example of a broker with inter-thread communications and external clients:
 
 .. literalinclude:: ../examples/inter_thread.rs

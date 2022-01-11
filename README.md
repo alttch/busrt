@@ -93,8 +93,7 @@ cargo build --features server,broker-api
 ```
 
 The "broker-api" feature is optional. When enabled, it allows to call broker
-internal functions and call RPC procedures from the command line with fifo
-channels.
+default internal functions.
 
 ## About the authors
 
