@@ -2,6 +2,12 @@
 
 The module contains Python sync client for [elbus](https://elbus.bma.ai/)
 
+## Installation
+
+```shell
+pip3 install elbus
+```
+
 ## Usage examples
 
 ### Listener
