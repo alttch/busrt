@@ -4,6 +4,9 @@ Note: the project is under development and in alpha stage
 
 <https://elbus.bma.ai/>
 
+<img src="https://raw.githubusercontent.com/alttch/elbus/main/logo-dark.svg"
+width="100" />
+
 ## What is elbus
 
 elbus is a rust-native IPC broker, written in Rust/Tokio, inspired by
