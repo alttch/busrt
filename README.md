@@ -5,7 +5,7 @@ Note: the project is under development and in alpha stage
 <https://elbus.bma.ai/>
 
 <img src="https://raw.githubusercontent.com/alttch/elbus/main/docs/images/logo-dark.svg"
-width="100" />
+width="200" />
 
 ## What is elbus
 
