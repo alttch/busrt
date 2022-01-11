@@ -1,5 +1,6 @@
 import elbus
 import time
+import msgpack
 
 
 # frame handler (topics/broadcasts)

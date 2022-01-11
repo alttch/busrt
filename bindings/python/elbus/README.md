@@ -65,6 +65,7 @@ bus.send('test/topic',
 ```python
 import elbus
 import time
+import msgpack
 
 # frame handler (topics/broadcasts)
 def on_frame(frame):
