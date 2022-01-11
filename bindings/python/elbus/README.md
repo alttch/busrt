@@ -1,6 +1,6 @@
 # Python sync client for elbus
 
-The module contains Python sync client for (elbus)[https://elbus.bma.ai/]
+The module contains Python sync client for [elbus](https://elbus.bma.ai/)
 
 ## Usage examples
 
