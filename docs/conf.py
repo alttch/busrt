@@ -28,6 +28,7 @@ mypath = Path().absolute().parent
 
 sys.path.insert(0, mypath.as_posix())
 sys.path.insert(0, (mypath / 'bindings/python/elbus').as_posix())
+sys.path.insert(0, (mypath / 'bindings/python/elbus_async').as_posix())
 
 # -- General configuration ------------------------------------------------
 
