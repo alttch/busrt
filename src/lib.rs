@@ -35,8 +35,8 @@ pub const ERR_TIMEOUT: u8 = 0x78;
 
 pub const GREETINGS: [u8; 1] = [0xEB];
 
-/// When the frame is sent, methods do not wait for the result but return OpConfirm type to let the
-/// sender get it if required.
+/// When a frame is sent, methods do not wait for the result, but they return OpConfirm type to let
+/// the sender get the result if required.
 ///
 /// When the frame is sent with QoS > 0, the Option contains Receiver<Result>
 ///
