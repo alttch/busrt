@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-/// When the frame is sent via sockets, only data pointer is necessary. For inter-thread
+/// When a frame is sent via sockets, only the data pointer is necessary. For inter-thread
 /// communications, a full data block is requied. This smart-pointer type acts like
 /// std::borrow:Cow, except is stuck to &[u8] / Vec<u8> buffers
 ///
