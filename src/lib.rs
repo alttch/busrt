@@ -1,4 +1,3 @@
-// TODO js client (rpc)
 // TODO CLI tool: send messages, listen, send rpc, listen rpc, benchmark
 // TODO broker internal functions with params
 // TODO broker internal broadcast (topic) events
