@@ -3,14 +3,14 @@ elbus RPC layer specification
 
 A client can send and receive notifications, incoming calls and replies.
 
-The layer completely replaces one-to-one messaging, all notifications should be
+The layer completely replaces one-to-one messaging, all notifications must be
 prefixed with 0x00 to tell the client that the frame is notification-only
 event.
 
 RPC calls can be also used as notifications. If call ID is set to zero, no
 response is required from the other side.
 
-The RPC layer is similar to `JSON RPC 2.0 <https://www.jsonrpc.org`_, but
+The RPC layer is similar to `JSON RPC 2.0 <https://www.jsonrpc.org>`_, but
 optimized for the byte protocol.
 
 Payload bytes
