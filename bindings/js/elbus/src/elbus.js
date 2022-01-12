@@ -27,6 +27,12 @@ const RPC_REQUEST = 0x01;
 const RPC_REPLY = 0x11;
 const RPC_ERROR = 0x12;
 
+const RPC_ERROR_CODE_PARSE = -32700;
+const RPC_ERROR_CODE_INVALID_REQUEST = -32600;
+const RPC_ERROR_CODE_METHOD_NOT_FOUND = -32601;
+const RPC_ERROR_CODE_INVALID_METHOD_PARAMS = -32602;
+const RPC_ERROR_CODE_INTERNAL = -32603;
+
 const net = require("net");
 const sleep = require("sleep-promise");
 const Mutex = require("async-mutex").Mutex;
@@ -46,7 +52,7 @@ class Frame {
     }
   }
   get_payload() {
-    return this.buf.slice(this.payload_pos);
+    return this.payload.slice(this.payload_pos);
   }
 }
 
@@ -85,10 +91,10 @@ class RpcCallEvent {
     return this.frame !== undefined || this.error !== undefined;
   }
   async lock_event() {
-    this.release = await this.lock.acquire();
+    this.release = await this.completed.acquire();
   }
   async wait_completed() {
-    let r = await self.lock.acquire();
+    let r = await this.completed.acquire();
     r();
     if (this.error) {
       throw this.error;
@@ -97,7 +103,7 @@ class RpcCallEvent {
     }
   }
   get_payload() {
-    return this.frame.payload.slice(5);
+    return this.frame.payload.slice(this.frame.payload_pos + 5);
   }
 }
 
@@ -108,7 +114,7 @@ class RpcEvent {
     this.payload_pos = payload_pos;
   }
   get_payload() {
-    return this.frame.payload.slice(this.payload_pos);
+    return this.frame.payload.slice(this.frame.payload_pos + this.payload_pos);
   }
 }
 
@@ -131,21 +137,41 @@ class RpcRequest {
 }
 
 class RpcReply {
-  constructor(method, result) {
+  constructor(result) {
     this.payload = result;
     this.qos = 1;
-    this.method = Buffer.from(method, "utf8");
     this.type = OP_MESSAGE;
+  }
+}
+
+class RpcError {
+  constructor(code, message) {
+    this.code = code;
+    if (message !== undefined) {
+      this.message = message;
+    } else {
+      this.message = Buffer.from(`RPC error code ${code}`);
+    }
   }
 }
 
 class Rpc {
   constructor(client) {
     this.client = client;
-    this.client.on_frame = this._handle_frame;
+    this.client.on_frame = (frame) => {
+      this._handle_frame(frame, this);
+    };
     this.call_id = 0;
     this.call_lock = new Mutex();
     this.calls = {};
+    this.on_frame = null;
+    this.on_notification = null;
+    this.on_call = () => {
+      throw new RpcError(
+        RPC_ERROR_CODE_METHOD_NOT_FOUND,
+        Buffer.from("RPC engine not intialized")
+      );
+    };
   }
   is_connected() {
     return this.client.connected;
@@ -161,8 +187,122 @@ class Rpc {
     ]);
     return await this.client.send(target, request);
   }
-  // TODO call
-  // TODO handle_frame
+  async call(target, request) {
+    let release = await this.call_lock.acquire();
+    let call_id = this.call_id + 1;
+    if (call_id == 0xffff_ffff) {
+      this.call_id = 0;
+    } else {
+      this.call_id = call_id;
+    }
+    release();
+    let call_event = new RpcCallEvent();
+    await call_event.lock_event();
+    this.calls[call_id] = call_event;
+    let call_id_buf = Buffer.alloc(4);
+    call_id_buf.writeUInt32LE(call_id);
+    request.header = Buffer.concat([
+      Buffer.from([RPC_REQUEST]),
+      call_id_buf,
+      request.method,
+      Buffer.alloc(1)
+    ]);
+    try {
+      let opc = await this.client.send(target, request);
+      let code = await opc.wait_completed();
+      if (code != RESPONSE_OK) {
+        delete this.calls[call_id];
+        let err_code = -32000 - code;
+        call_event.error = new RpcError(err_code);
+        call_event.release();
+      }
+    } catch (err) {
+      delete this.calls[call_id];
+      let err_code = -32000 - ERR_IO;
+      call_event.error = new RpcError(err_code, Buffer.from(err.toString()));
+      call_event.release();
+    }
+    return call_event;
+  }
+  async _handle_frame(frame, me) {
+    if (frame.type == OP_MESSAGE) {
+      let op_code = frame.payload[frame.payload_pos];
+      if (op_code == RPC_NOTIFICATION) {
+        if (me.on_notification) {
+          let ev = new RpcEvent(RPC_NOTIFICATION, frame, 1);
+          await me.on_notification(ev);
+        }
+      } else if (op_code == RPC_REQUEST) {
+        let sender = frame.sender;
+        let call_id_b = frame.payload.slice(
+          frame.payload_pos + 1,
+          frame.payload_pos + 5
+        );
+        let call_id = call_id_b.readUInt32LE();
+        let s = frame.payload.slice(frame.payload_pos + 5);
+        let i = s.indexOf(0);
+        if (i == -1) {
+          throw "Invalid elbus RPC frame";
+        }
+        let method = s.slice(0, i);
+        let ev = new RpcEvent(RPC_REQUEST, frame, 6 + method.length);
+        ev.call_id = call_id;
+        ev.method = method;
+        if (call_id == 0) {
+          await me.on_call(event);
+        } else {
+          let reply = new RpcReply();
+          try {
+            reply.payload = await me.on_call(ev);
+            if (reply.payload === null || reply.payload === undefined) {
+              reply.payload = Buffer.alloc(0);
+            }
+            reply.header = Buffer.concat([Buffer.from([RPC_REPLY]), call_id_b]);
+          } catch (err) {
+            let code = err.code;
+            if (code === undefined) {
+              code = RPC_ERROR_CODE_INTERNAL;
+            }
+            let code_b = Buffer.alloc(2);
+            code_b.writeInt16LE(code);
+            reply.header = Buffer.concat([
+              Buffer.from([RPC_ERROR]),
+              call_id_b,
+              code_b
+            ]);
+            reply.payload = err.message;
+            if (reply.payload === undefined) {
+              reply.payload = Buffer.from(err.toString());
+            }
+          }
+          await me.client.send(sender, reply);
+        }
+      } else if (op_code == RPC_REPLY || op_code == RPC_ERROR) {
+        let call_id = frame.payload.readUInt32LE(frame.payload_pos + 1);
+        let call_event = me.calls[call_id];
+        if (call_event !== undefined) {
+          delete me.calls[call_id];
+          call_event.frame = frame;
+          if (op_code == RPC_ERROR) {
+            let err_code = frame.payload.readInt16LE(frame.payload_pos + 5);
+            call_event.error = new RpcError(
+              err_code,
+              frame.payload.slice(frame.payload_pos + 7)
+            );
+          } else {
+            call_event.payload_pos = 8;
+          }
+          call_event.release();
+        } else {
+          console.log(`warning: orphaned RPC response: ${call_id}`);
+        }
+      } else {
+        throw `Invalid RPC frame code ${op_code}`;
+      }
+    } else if (me.on_frame) {
+      process.nextTick(() => me.on_frame(frame));
+    }
+  }
 }
 
 class Client {
@@ -194,7 +334,7 @@ class Client {
         throw "Unsupported protocol";
       }
       let ver = Buffer.from(header.slice(1, 3));
-      if (ver.readInt16LE(0) != PROTOCOL_VERSION) {
+      if (ver.readUInt16LE(0) != PROTOCOL_VERSION) {
         throw "Unsupported protocol version";
       }
       await this.socket.writeAll(header);
@@ -204,7 +344,7 @@ class Client {
       }
       let buf = Buffer.from(this.name, "utf8");
       let len_buf = Buffer.alloc(2);
-      len_buf.writeInt16LE(buf.length);
+      len_buf.writeUInt16LE(buf.length);
       await this.socket.writeAll(len_buf);
       await this.socket.writeAll(buf);
       code = (await this.socket.read(1))[0];
@@ -226,7 +366,7 @@ class Client {
         if (buf[0] == OP_NOP) {
           continue;
         } else if (buf[0] == OP_ACK) {
-          let op_id = buf.readInt32LE(1);
+          let op_id = buf.readUInt32LE(1);
           let o = me.frames[op_id];
           delete me.frames[op_id];
           if (o) {
@@ -238,24 +378,24 @@ class Client {
         } else {
           let frame = new Frame();
           frame.type = buf[0];
-          let frame_len = buf.readInt32LE(1);
-          frame.buf = await socket.read(frame_len);
-          if (frame.buf.length != frame_len) {
+          let frame_len = buf.readUInt32LE(1);
+          frame.payload = await socket.read(frame_len);
+          if (frame.payload.length != frame_len) {
             console.log(
-              `Broken elbus frame: ${frame.buf.length} / ${frame_len}`
+              `Broken elbus frame: ${frame.payload.length} / ${frame_len}`
             );
           }
-          let i = frame.buf.indexOf(0);
+          let i = frame.payload.indexOf(0);
           if (i == -1) {
             throw "Invalid elbus frame";
           }
-          frame.sender = frame.buf.slice(0, i).toString();
+          frame.sender = frame.payload.slice(0, i).toString();
           if (frame.type == OP_PUBLISH) {
-            let t = frame.buf.indexOf(0);
+            let t = frame.payload.indexOf(0);
             if (t == -1) {
               throw "Invalid elbus frame";
             }
-            frame.topic = frame.buf.slice(0, t).toString();
+            frame.topic = frame.payload.slice(0, t).toString();
             i += t + 2;
           }
           frame.payload_pos = i + 1;
@@ -314,9 +454,9 @@ class Client {
             payload = Buffer.from(frame.topic, "utf8");
           }
           let header = Buffer.alloc(9);
-          header.writeInt32LE(frame_id);
+          header.writeUInt32LE(frame_id);
           header[4] = flags;
-          header.writeInt32LE(payload.length, 5);
+          header.writeUInt32LE(payload.length, 5);
           await this.socket.write(Buffer.concat([header, payload]));
           return o;
         } else {
@@ -329,9 +469,9 @@ class Client {
             throw "frame too large";
           }
           let header = Buffer.alloc(9);
-          header.writeInt32LE(frame_id);
+          header.writeUInt32LE(frame_id);
           header[4] = flags;
-          header.writeInt32LE(frame_len, 5);
+          header.writeUInt32LE(frame_len, 5);
           let bufs = [header, target_buf, Buffer.alloc(1)];
           if (frame.header) {
             bufs.push(frame.header);
@@ -401,6 +541,7 @@ exports.Frame = Frame;
 exports.Rpc = Rpc;
 exports.RpcNotification = RpcNotification;
 exports.RpcRequest = RpcRequest;
+exports.RpcError = RpcError;
 
 exports.OP_PUBLISH = OP_PUBLISH;
 exports.OP_SUBSCRIBE = OP_SUBSCRIBE;
@@ -418,3 +559,9 @@ exports.ERR_NOT_SUPPORTED = ERR_NOT_SUPPORTED;
 exports.ERR_BUSY = ERR_BUSY;
 exports.ERR_NOT_DELIVERED = ERR_NOT_DELIVERED;
 exports.ERR_TIMEOUT = ERR_TIMEOUT;
+
+exports.RPC_ERROR_CODE_PARSE = RPC_ERROR_CODE_PARSE;
+exports.RPC_ERROR_CODE_INVALID_REQUEST = RPC_ERROR_CODE_INVALID_REQUEST;
+exports.RPC_ERROR_CODE_METHOD_NOT_FOUND = RPC_ERROR_CODE_METHOD_NOT_FOUND;
+exports.RPC_ERROR_CODE_INVALID_METHOD_PARAMS = RPC_ERROR_CODE_INVALID_METHOD_PARAMS;
+exports.RPC_ERROR_CODE_INTERNAL = RPC_ERROR_CODE_INTERNAL;
