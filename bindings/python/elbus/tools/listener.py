@@ -22,6 +22,8 @@ def on_notification(event):
 def on_call(event):
     if event.method == b'bmtest':
         return event.get_payload().decode().replace('aaa', 'bbb')
+    elif event.method == b'err':
+        raise elbus.rpc.RpcException('test error', -777);
     else:
         import msgpack
         print('Call:', event.frame.sender, event.method,
