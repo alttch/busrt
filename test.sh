@@ -12,9 +12,9 @@ case ${CMD} in
   #benchmark)
     #cargo run --release --bin psrt-cli --features cli -- localhost:2873 --benchmark $*
     #;;
-  #client)
-    #cargo run --release --bin psrt-cli --features cli -- localhost:2873 $*
-    #;;
+  cli)
+    cargo run --release --bin elbus --features cli -- /tmp/elbus.sock $*
+    ;;
   *)
     echo "command unknown: ${CMD}"
     ;;

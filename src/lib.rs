@@ -1,4 +1,4 @@
-// TODO CLI tool: send messages, listen, send rpc, listen rpc, benchmark
+// TODO CLI tool: send messages, send rpc, listen rpc, benchmark
 // TODO broker internal functions with params
 // TODO broker internal broadcast (topic) events
 // TODO broker info events
@@ -34,6 +34,10 @@ pub const ERR_NOT_DELIVERED: u8 = 0x77;
 pub const ERR_TIMEOUT: u8 = 0x78;
 
 pub const GREETINGS: [u8; 1] = [0xEB];
+
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub static AUTHOR: &str = "(c) 2022 Bohemia Automation / Altertech";
 
 /// When a frame is sent, methods do not wait for the result, but they return OpConfirm type to let
 /// the sender get the result if required.
