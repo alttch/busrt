@@ -35,6 +35,8 @@ use crate::{Frame, FrameData, FrameKind, FrameOp, QoS};
 use crate::rpc::{Rpc, RpcClient};
 #[cfg(feature = "broker-api")]
 use crate::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
+#[cfg(feature = "broker-api")]
+use serde_value::Value;
 
 use async_trait::async_trait;
 
@@ -422,8 +424,17 @@ struct BrokerRpcHandlers {
 #[async_trait]
 impl RpcHandlers for BrokerRpcHandlers {
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
+        let payload = event.payload();
+        let params: HashMap<String, Value> = if payload.is_empty() {
+            HashMap::new()
+        } else {
+            rmp_serde::from_read_ref(event.payload())?
+        };
         match event.parse_method()? {
             "list_clients" => {
+                if !params.is_empty() {
+                    return Err(RpcError::params());
+                }
                 let db = self.db.clients.read().unwrap();
                 let mut clients: Vec<ClientInfo> = db
                     .values()

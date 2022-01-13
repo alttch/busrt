@@ -126,42 +126,49 @@ impl fmt::Display for Error {
 }
 
 impl Error {
+    #[inline]
     pub fn new(kind: ErrorKind, message: Option<impl fmt::Display>) -> Self {
         Self {
             kind,
             message: message.map(|m| m.to_string()),
         }
     }
+    #[inline]
     pub fn io(e: impl fmt::Display) -> Self {
         Self {
             kind: ErrorKind::Io,
             message: Some(e.to_string()),
         }
     }
+    #[inline]
     pub fn data(e: impl fmt::Display) -> Self {
         Self {
             kind: ErrorKind::Data,
             message: Some(e.to_string()),
         }
     }
+    #[inline]
     pub fn not_supported(e: impl fmt::Display) -> Self {
         Self {
             kind: ErrorKind::NotSupported,
             message: Some(e.to_string()),
         }
     }
+    #[inline]
     pub fn not_registered() -> Self {
         Self {
             kind: ErrorKind::NotRegistered,
             message: None,
         }
     }
+    #[inline]
     pub fn timeout() -> Self {
         Self {
             kind: ErrorKind::Timeout,
             message: None,
         }
     }
+    #[inline]
     pub fn busy(e: impl fmt::Display) -> Self {
         Self {
             kind: ErrorKind::Busy,

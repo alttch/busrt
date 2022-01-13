@@ -525,7 +525,11 @@ impl Rpc for RpcClient {
         } else {
             rx.await.map_err(Into::<Error>::into)?
         };
-        Ok(result)
+        if let Ok(e) = TryInto::<RpcError>::try_into(&result) {
+            Err(e)
+        } else {
+            Ok(result)
+        }
     }
     fn is_connected(&self) -> bool {
         self.connected
@@ -548,28 +552,45 @@ pub struct RpcError {
     data: Option<Vec<u8>>,
 }
 
+impl TryFrom<&RpcEvent> for RpcError {
+    type Error = Error;
+    #[inline]
+    fn try_from(event: &RpcEvent) -> Result<Self, Self::Error> {
+        if event.kind() == RpcEventKind::ErrorReply {
+            Ok(RpcError::new(event.code(), Some(event.payload().to_vec())))
+        } else {
+            Err(Error::data("not a RPC error"))
+        }
+    }
+}
+
 impl RpcError {
+    #[inline]
     pub fn new(code: i16, data: Option<Vec<u8>>) -> Self {
         Self { code, data }
     }
+    #[inline]
     pub fn method() -> Self {
         Self {
             code: RPC_ERROR_CODE_METHOD_NOT_FOUND,
             data: None,
         }
     }
+    #[inline]
     pub fn params() -> Self {
         Self {
             code: RPC_ERROR_CODE_INVALID_METHOD_PARAMS,
             data: None,
         }
     }
+    #[inline]
     pub fn parse() -> Self {
         Self {
             code: RPC_ERROR_CODE_PARSE,
             data: None,
         }
     }
+    #[inline]
     pub fn invalid() -> Self {
         Self {
             code: RPC_ERROR_CODE_INVALID_REQUEST,
@@ -579,6 +600,7 @@ impl RpcError {
 }
 
 impl From<Error> for RpcError {
+    #[inline]
     fn from(e: Error) -> RpcError {
         RpcError {
             code: -32000 - e.kind() as i16,
@@ -588,6 +610,7 @@ impl From<Error> for RpcError {
 }
 
 impl From<rmp_serde::encode::Error> for RpcError {
+    #[inline]
     fn from(e: rmp_serde::encode::Error) -> RpcError {
         RpcError {
             code: RPC_ERROR_CODE_INTERNAL,
@@ -597,6 +620,7 @@ impl From<rmp_serde::encode::Error> for RpcError {
 }
 
 impl From<rmp_serde::decode::Error> for RpcError {
+    #[inline]
     fn from(e: rmp_serde::decode::Error) -> RpcError {
         RpcError {
             code: RPC_ERROR_CODE_PARSE,
@@ -606,6 +630,7 @@ impl From<rmp_serde::decode::Error> for RpcError {
 }
 
 impl fmt::Display for RpcError {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "rpc error code: {}", self.code)
     }
