@@ -429,6 +429,10 @@ struct BrokerRpcHandlers {
 #[async_trait]
 impl RpcHandlers for BrokerRpcHandlers {
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
+        let method = event.parse_method()?;
+        if method == "benchmark.test" {
+            return Ok(Some(event.payload().to_vec()));
+        }
         let payload = event.payload();
         let params: HashMap<String, Value> = if payload.is_empty() {
             HashMap::new()
@@ -454,7 +458,6 @@ impl RpcHandlers for BrokerRpcHandlers {
                 clients.sort();
                 Ok(Some(rmp_serde::to_vec_named(&ClientList { clients })?))
             }
-            "benchmark.test" => Ok(Some(event.payload().to_vec())),
             _ => Err(RpcError::method()),
         }
     }
