@@ -524,32 +524,41 @@ async fn main() {
                 }
                 staged_benchmark_finish_current!(cmd.iters);
             }
-            staged_benchmark_start!("send+recv.qos.processed");
-            let mut futs = Vec::new();
-            for w in 0..cmd.workers {
-                let client = clients[w as usize].clone();
-                let crx = ecs[w as usize].clone();
-                let payload = data.clone();
-                futs.push(tokio::spawn(async move {
-                    let mut client = client.lock().await;
-                    let target = client.get_name().to_owned();
-                    for _ in 0..iters_worker {
-                        //let result = client
-                        //.send(&target, payload.clone().into(), QoS::Processed)
-                        //.await
-                        //.unwrap();
-                        //result.unwrap().await;
-                    }
-                }));
-                //futs.push(tokio::spawn(async move {
-                //let mut cnt = 0;
-                //while cnt < iters_per
-                //}));
+            for q in vec![(QoS::No, "no"), (QoS::Processed, "processed")] {
+                let qos = q.0;
+                staged_benchmark_start!(&format!("send+recv.qos.{}", q.1));
+                let mut futs = Vec::new();
+                for w in 0..cmd.workers {
+                    let client = clients[w as usize].clone();
+                    let crx = ecs[w as usize].clone();
+                    let payload = data.clone();
+                    futs.push(tokio::spawn(async move {
+                        let mut client = client.lock().await;
+                        let target = client.get_name().to_owned();
+                        for _ in 0..iters_worker {
+                            let result = client
+                                .send(&target, payload.clone().into(), qos)
+                                .await
+                                .unwrap();
+                            if qos == QoS::Processed {
+                                result.unwrap().await.unwrap().unwrap();
+                            }
+                        }
+                    }));
+                    futs.push(tokio::spawn(async move {
+                        let rx = crx.lock().await;
+                        let mut cnt = 0;
+                        while cnt < iters_worker {
+                            let _ = rx.recv().await;
+                            cnt += 1;
+                        }
+                    }));
+                }
+                for f in futs {
+                    f.await.unwrap();
+                }
+                staged_benchmark_finish_current!(cmd.iters);
             }
-            for f in futs {
-                f.await.unwrap();
-            }
-            staged_benchmark_finish_current!(cmd.iters);
             staged_benchmark_print!();
         }
     }
