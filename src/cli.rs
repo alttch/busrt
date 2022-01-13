@@ -5,7 +5,7 @@ use colored::Colorize;
 use elbus::client::AsyncClient;
 use elbus::common::ClientList;
 use elbus::ipc::{Client, Config};
-use elbus::rpc::{DummyHandlers, Rpc, RpcClient, RpcEvent, RpcHandlers, RpcResult};
+use elbus::rpc::{DummyHandlers, Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::{empty_payload, Error, Frame, QoS};
 use log::info;
 use num_format::{Locale, ToFormattedString};
@@ -13,7 +13,7 @@ use serde_value::Value;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio::time::sleep;
 
@@ -42,7 +42,7 @@ where
 
 #[derive(Subcommand, Clone)]
 enum BrokerCommand {
-    #[clap(override_help = "List registered clients")]
+    #[clap(name = "client.list")]
     Clients,
 }
 
@@ -165,7 +165,7 @@ fn decode_json(payload: &str) -> Result<BTreeMap<Value, Value>, serde_json::Erro
     serde_json::from_str(payload)
 }
 
-fn print_payload(payload: &[u8]) {
+async fn print_payload(payload: &[u8], silent: bool) {
     let mut isstr = true;
     for p in payload {
         if *p < 9 {
@@ -176,16 +176,28 @@ fn print_payload(payload: &[u8]) {
     if isstr {
         if let Ok(s) = std::str::from_utf8(payload) {
             if let Ok(j) = decode_json(s) {
-                println!("JSON:");
-                println!("{}", serde_json::to_string_pretty(&j).unwrap());
+                if !silent {
+                    println!("JSON:");
+                }
+                println!(
+                    "{}",
+                    if silent {
+                        serde_json::to_string(&j)
+                    } else {
+                        serde_json::to_string_pretty(&j)
+                    }
+                    .unwrap()
+                );
             } else {
-                println!("STR: '{}'", s);
+                println!("{} {}", if silent { "" } else { "STR: " }, s);
             }
             return;
         }
     }
     if let Ok(map) = decode_msgpack(payload) {
-        println!("MSGPACK:");
+        if !silent {
+            println!("MSGPACK:");
+        }
         if let Ok(s) = serde_json::to_string_pretty(&map) {
             println!("{}", s);
         } else {
@@ -194,13 +206,18 @@ fn print_payload(payload: &[u8]) {
             }
         }
     } else {
-        let (p, dots) = if payload.len() > 256 {
-            (&payload[..256], "...")
+        if silent {
+            let mut stdin = tokio::io::stdout();
+            stdin.write_all(payload).await.unwrap();
         } else {
-            #[allow(clippy::redundant_slicing)]
-            (&payload[..], "")
-        };
-        println!("HEX: {}{}", hex::encode(p), dots);
+            let (p, dots) = if payload.len() > 256 {
+                (&payload[..256], "...")
+            } else {
+                #[allow(clippy::redundant_slicing)]
+                (&payload[..], "")
+            };
+            println!("HEX: {}{}", hex::encode(p), dots);
+        }
     }
 }
 
@@ -235,7 +252,7 @@ async fn subscribe_topics(client: &mut Client, topics: &[String]) -> Result<(), 
         .unwrap()
 }
 
-fn print_frame(frame: &Frame) {
+async fn print_frame(frame: &Frame) {
     info!("Incoming frame {} byte(s)", fnum!(frame.payload().len()));
     println!(
         "{} from {}",
@@ -245,7 +262,7 @@ fn print_frame(frame: &Frame) {
     if let Some(topic) = frame.topic() {
         println!("topic: {}", topic.magenta());
     }
-    print_payload(frame.payload());
+    print_payload(frame.payload(), false).await;
     sep();
 }
 
@@ -254,7 +271,7 @@ struct Handlers {}
 #[async_trait]
 impl RpcHandlers for Handlers {
     async fn handle_frame(&self, frame: Frame) {
-        print_frame(&frame);
+        print_frame(&frame).await;
     }
     async fn handle_notification(&self, event: RpcEvent) {
         info!(
@@ -266,7 +283,7 @@ impl RpcHandlers for Handlers {
             event.kind().to_debug_string().yellow(),
             event.sender().bold()
         );
-        print_payload(event.payload());
+        print_payload(event.payload(), false).await;
         sep();
     }
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
@@ -283,7 +300,7 @@ impl RpcHandlers for Handlers {
                 .bold()
         );
         println!("from {}", event.sender().bold());
-        print_payload(event.payload());
+        print_payload(event.payload(), false).await;
         sep();
         Ok(None)
     }
@@ -409,6 +426,21 @@ async fn benchmark_client(
     }
 }
 
+struct BenchmarkHandlers {}
+
+#[async_trait]
+impl RpcHandlers for BenchmarkHandlers {
+    async fn handle_frame(&self, _frame: Frame) {}
+    async fn handle_notification(&self, _event: RpcEvent) {}
+    async fn handle_call(&self, event: RpcEvent) -> RpcResult {
+        if event.parse_method()? == "benchmark.selftest" {
+            Ok(Some(event.payload().to_vec()))
+        } else {
+            Err(RpcError::method())
+        }
+    }
+}
+
 async fn benchmark_rpc(
     opts: &Opts,
     client_name: &str,
@@ -425,30 +457,53 @@ async fn benchmark_rpc(
         let cname = format!("{}-{}", client_name, w + 1);
         let cname_null = format!("{}-{}-null", client_name, w + 1);
         let client = create_client(&opts, &cname).await;
-        let rpc = RpcClient::new(client, DummyHandlers {});
+        let rpc = RpcClient::new(client, BenchmarkHandlers {});
         rpcs.push(Arc::new(Mutex::new(rpc)));
         cnns.push(cname_null);
     }
     macro_rules! spawn_caller {
-        ($rpc: expr, $target: expr, $payload: expr) => {
+        ($rpc: expr, $target: expr, $method: expr, $payload: expr, $cr: expr) => {
             futs.push(tokio::spawn(async move {
-                let rpc = $rpc.lock().await;
+                let mut rpc = $rpc.lock().await;
                 for _ in 0..iters_worker {
-                    let result = rpc
-                        .call0(&$target, "test", $payload.clone().into())
-                        .await
-                        .unwrap();
-                    let _r = result.unwrap().await.unwrap();
+                    if $cr {
+                        let result = rpc
+                            .call(&$target, $method, $payload.clone().into())
+                            .await
+                            .unwrap();
+                        assert_eq!(result.payload(), *$payload);
+                    } else {
+                        let result = rpc
+                            .call0(&$target, $method, $payload.clone().into())
+                            .await
+                            .unwrap();
+                        let _r = result.unwrap().await.unwrap();
+                    }
                 }
             }));
         };
     }
-    staged_benchmark_start!(&format!("rpc.call0"));
+    staged_benchmark_start!(&format!("rpc.call"));
     for w in 0..workers {
         let rpc = rpcs[w as usize].clone();
         let payload = data.clone();
+        spawn_caller!(rpc, ".broker", "benchmark.test", payload, true);
+    }
+    bm_finish!(iters, futs);
+    staged_benchmark_start!(&format!("rpc.call+handle"));
+    for w in 0..workers {
+        let rpc = rpcs[w as usize].clone();
+        let target = rpc.lock().await.client().lock().await.get_name().to_owned();
+        let payload = data.clone();
+        spawn_caller!(rpc, target, "benchmark.selftest", payload, true);
+    }
+    bm_finish!(iters, futs);
+    staged_benchmark_start!(&format!("rpc.call0"));
+    for w in 0..workers {
+        let rpc = rpcs[w as usize].clone();
         let target = cnns[w as usize].clone();
-        spawn_caller!(rpc, target, payload);
+        let payload = data.clone();
+        spawn_caller!(rpc, target, "test", payload, false);
     }
     bm_finish!(iters, futs);
 }
@@ -507,7 +562,7 @@ async fn main() {
                 BrokerCommand::Clients => {
                     let mut rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc
-                        .call(".broker", "list_clients", empty_payload!())
+                        .call(".broker", "client.list", empty_payload!())
                         .await
                         .unwrap();
                     let mut clients: ClientList =
@@ -538,7 +593,7 @@ async fn main() {
                 client_name.cyan().bold()
             );
             while let Ok(frame) = rx.recv().await {
-                print_frame(&frame);
+                print_frame(&frame).await;
             }
         }
         Command::r#Send(ref cmd) => {
@@ -610,7 +665,7 @@ async fn main() {
                         .call(&cmd.target, &cmd.method, payload.into())
                         .await
                         .unwrap();
-                    print_payload(result.payload());
+                    print_payload(result.payload(), opts.silent).await;
                 }
             }
         }

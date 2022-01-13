@@ -1,4 +1,3 @@
-// TODO CLI tool: benchmark
 // TODO broker internal broadcast (topic) events
 // TODO broker info events
 // TODO tests
