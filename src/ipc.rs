@@ -143,13 +143,7 @@ macro_rules! send_frame {
         buf.extend_from_slice(&((t.len() + $payload.len() + 1) as u32).to_le_bytes());
         buf.extend_from_slice(t);
         buf.push(0x00);
-        trace!(
-            "sending {:?} to {} ({} bytes) with QoS={:?}",
-            $op,
-            $target,
-            $payload.len(),
-            $qos
-        );
+        trace!("sending elbus {:?} to {} QoS={:?}", $op, $target, $qos);
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};
     ($self: expr, $target: expr, $header: expr, $payload: expr, $op: expr, $qos: expr) => {{
@@ -161,13 +155,7 @@ macro_rules! send_frame {
         buf.extend_from_slice(t);
         buf.push(0x00);
         buf.extend_from_slice($header);
-        trace!(
-            "sending {:?} to {} ({} bytes) with QoS={:?}",
-            $op,
-            $target,
-            $payload.len() + $header.len(),
-            $qos
-        );
+        trace!("sending elbus {:?} to {} QoS={:?}", $op, $target, $qos);
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};
     ($self: expr, $payload: expr, $op: expr, $qos: expr) => {{
