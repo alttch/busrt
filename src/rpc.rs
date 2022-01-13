@@ -306,14 +306,14 @@ async fn processor<C, H>(
                         let h = handlers.clone();
                         tokio::spawn(async move {
                             let res = h.handle_call(event).await;
-                            if let Some(ev) = ev {
+                            if let Some((target, cl)) = ev {
                                 macro_rules! send_reply {
                                     ($payload: expr, $result: expr) => {{
-                                        let mut client = ev.1.lock().await;
+                                        let mut client = cl.lock().await;
                                         if let Some(result) = $result {
                                             client
                                                 .zc_send(
-                                                    &ev.0,
+                                                    &target,
                                                     $payload,
                                                     result.into(),
                                                     QoS::Processed,
@@ -322,7 +322,7 @@ async fn processor<C, H>(
                                         } else {
                                             client
                                                 .zc_send(
-                                                    &ev.0,
+                                                    &target,
                                                     $payload,
                                                     (&[][..]).into(),
                                                     QoS::Processed,
@@ -333,7 +333,7 @@ async fn processor<C, H>(
                                 }
                                 match res {
                                     Ok(v) => {
-                                        trace!("Sending RPC reply id {} to {}", id, ev.0);
+                                        trace!("Sending RPC reply id {} to {}", id, target);
                                         let mut payload = Vec::with_capacity(5);
                                         payload.push(RPC_REPLY);
                                         payload.extend_from_slice(&id.to_le_bytes());
@@ -344,7 +344,7 @@ async fn processor<C, H>(
                                             "Sending RPC error {} reply id {} to {}",
                                             e.code,
                                             id,
-                                            ev.0
+                                            target,
                                         );
                                         let mut payload = Vec::with_capacity(7);
                                         payload.push(RPC_ERROR);
