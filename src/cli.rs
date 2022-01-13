@@ -1,15 +1,18 @@
+use async_trait::async_trait;
 use clap::Clap;
 use colored::Colorize;
 use elbus::client::AsyncClient;
 use elbus::common::ClientList;
 use elbus::ipc::{Client, Config};
-use elbus::rpc::{DummyHandlers, Rpc, RpcClient};
-use elbus::{empty_payload, Error, QoS};
+use elbus::rpc::{DummyHandlers, Rpc, RpcClient, RpcEvent, RpcHandlers, RpcResult};
+use elbus::{empty_payload, Error, Frame, QoS};
 use log::info;
 use num_format::{Locale, ToFormattedString};
 use serde_value::Value;
 use std::collections::BTreeMap;
+use std::time::Duration;
 use tokio::io::AsyncReadExt;
+use tokio::time::sleep;
 
 #[macro_use]
 extern crate prettytable;
@@ -57,12 +60,23 @@ struct PublishCommand {
 }
 
 #[derive(Clap)]
+enum RpcCommand {
+    Listen(RpcListenCommand),
+}
+
+#[derive(Clap)]
+struct RpcListenCommand {
+    #[clap(short = 't', long = "topics", about = "Subscribe to topics")]
+    topics: Vec<String>,
+}
+
+#[derive(Clap)]
 enum Command {
     Broker(BrokerCommand),
     Listen(ListenCommand),
     r#Send(SendCommand),
     Publish(PublishCommand),
-    //Rpc(RpcCommand),
+    Rpc(RpcCommand),
 }
 
 #[derive(Clap)]
@@ -164,6 +178,73 @@ macro_rules! ok {
     };
 }
 
+async fn subscribe_topics(client: &mut Client, topics: &Vec<String>) -> Result<(), Error> {
+    topics
+        .iter()
+        .for_each(|t| info!("subscribing to the topic {}", t.yellow()));
+    client
+        .subscribe_bulk(topics.iter().map(String::as_str).collect(), QoS::Processed)
+        .await
+        .unwrap()
+        .unwrap()
+        .await
+        .unwrap()
+}
+
+fn print_frame(frame: &Frame) {
+    info!("Incoming frame {} byte(s)", fnum!(frame.payload().len()));
+    println!(
+        "{} from {}",
+        frame.kind().to_debug_string().yellow(),
+        frame.sender().bold()
+    );
+    if let Some(topic) = frame.topic() {
+        println!("topic: {}", topic.magenta());
+    }
+    print_payload(frame.payload());
+    sep();
+}
+
+struct Handlers {}
+
+#[async_trait]
+impl RpcHandlers for Handlers {
+    async fn handle_frame(&self, frame: Frame) {
+        print_frame(&frame);
+    }
+    async fn handle_notification(&self, event: RpcEvent) {
+        info!(
+            "Incoming RPC notification {} byte(s)",
+            fnum!(event.payload().len())
+        );
+        println!(
+            "{} from {}",
+            event.kind().to_debug_string().yellow(),
+            event.sender().bold()
+        );
+        print_payload(event.payload());
+        sep();
+    }
+    async fn handle_call(&self, event: RpcEvent) -> RpcResult {
+        info!("Incoming RPC call");
+        println!(
+            "method: {}",
+            event
+                .parse_method()
+                .map_or_else(
+                    |_| format!("HEX: {}", hex::encode(event.method())),
+                    ToOwned::to_owned
+                )
+                .blue()
+                .bold()
+        );
+        println!("from {}", event.sender().bold());
+        print_payload(event.payload());
+        sep();
+        Ok(None)
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
@@ -228,35 +309,12 @@ async fn main() {
             }
         },
         Command::Listen(cmd) => {
-            let rx = client.take_event_channel().unwrap();
-            cmd.topics
-                .iter()
-                .for_each(|t| info!("subscribing to the topic {}", t.yellow()));
-            client
-                .subscribe_bulk(
-                    cmd.topics.iter().map(String::as_str).collect(),
-                    QoS::Processed,
-                )
-                .await
-                .unwrap()
-                .unwrap()
-                .await
-                .unwrap()
-                .unwrap();
+            subscribe_topics(&mut client, &cmd.topics).await.unwrap();
             sep();
+            let rx = client.take_event_channel().unwrap();
             println!("Listening to messages for {} ...", name.cyan().bold());
             while let Ok(frame) = rx.recv().await {
-                info!("Incoming frame {} byte(s)", fnum!(frame.payload().len()));
-                println!(
-                    "{} from {}",
-                    frame.kind().to_debug_string().yellow(),
-                    frame.sender().bold()
-                );
-                if let Some(topic) = frame.topic() {
-                    println!("topic: {}", topic.magenta());
-                }
-                print_payload(frame.payload());
-                sep();
+                print_frame(&frame);
             }
         }
         Command::r#Send(cmd) => {
@@ -281,5 +339,17 @@ async fn main() {
                 .unwrap();
             ok!();
         }
+        Command::Rpc(r) => match r {
+            RpcCommand::Listen(cmd) => {
+                subscribe_topics(&mut client, &cmd.topics).await.unwrap();
+                let rpc = RpcClient::new(client, Handlers {});
+                sep();
+                println!("Listening to RPC messages for {} ...", name.cyan().bold());
+                let sleep_step = Duration::from_millis(100);
+                while rpc.is_connected() {
+                    sleep(sleep_step).await;
+                }
+            }
+        },
     }
 }
