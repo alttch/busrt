@@ -11,9 +11,14 @@ use log::info;
 use num_format::{Locale, ToFormattedString};
 use serde_value::Value;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
+use tokio::sync::Mutex;
 use tokio::time::sleep;
+
+#[macro_use]
+extern crate bma_benchmark;
 
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
@@ -37,7 +42,7 @@ where
 
 #[derive(Subcommand, Clone)]
 enum BrokerCommand {
-    //#[clap(help = "List registered clients")]
+    #[clap(override_help = "List registered clients")]
     Clients,
 }
 
@@ -87,6 +92,16 @@ struct RpcListenCommand {
     topics: Vec<String>,
 }
 
+#[derive(Parser, Clone)]
+struct BenchmarkCommand {
+    #[clap(short = 'w', long = "workers", default_value = "1")]
+    workers: u32,
+    #[clap(short = 'w', long = "payload-size", default_value = "100")]
+    payload_size: usize,
+    #[clap(short = 'i', long = "iters", default_value = "1000000")]
+    iters: u32,
+}
+
 #[derive(Clone, Subcommand)]
 enum Command {
     #[clap(subcommand)]
@@ -96,6 +111,7 @@ enum Command {
     Publish(PublishCommand),
     #[clap(subcommand)]
     Rpc(RpcCommand),
+    Benchmark(BenchmarkCommand),
 }
 
 #[derive(Parser)]
@@ -103,11 +119,17 @@ enum Command {
 struct Opts {
     #[clap(name = "socket path or host:port")]
     path: String,
-    #[clap(short = 'n', long = "--name")]
+    #[clap(short = 'n', long = "name")]
     name: Option<String>,
-    #[clap(short = 'v', long = "--verbose")]
+    #[clap(long = "read-buf", default_value = "8192")]
+    read_buf: usize,
+    #[clap(long = "queue-size", default_value = "8192")]
+    queue_size: usize,
+    #[clap(long = "timeout", default_value = "5")]
+    timeout: f32,
+    #[clap(short = 'v', long = "verbose")]
     verbose: bool,
-    #[clap(short = 's', long = "--silent", help = "suppress logging")]
+    #[clap(short = 's', long = "silent", help = "suppress logging")]
     silent: bool,
     #[clap(subcommand)]
     command: Command,
@@ -289,7 +311,7 @@ async fn get_payload(candidate: &Option<String>) -> Vec<u8> {
 #[tokio::main]
 async fn main() {
     let opts = Opts::parse();
-    let name = opts.name.unwrap_or_else(|| {
+    let client_name = opts.name.unwrap_or_else(|| {
         format!(
             "cli.{}.{}",
             hostname::get()
@@ -309,11 +331,21 @@ async fn main() {
             })
             .init();
     }
-    info!("Connecting to {}, using service name {}", opts.path, name);
-    let config = Config::new(&opts.path, &name);
-    let mut client = Client::connect(&config)
-        .await
-        .expect("Unable to connect to the elbus broker");
+    info!(
+        "Connecting to {}, using service name {}",
+        opts.path, client_name
+    );
+    macro_rules! client {
+        ($name: expr) => {{
+            let config = Config::new(&opts.path, $name)
+                .read_buf(opts.read_buf)
+                .queue_size(opts.queue_size)
+                .timeout(Duration::from_secs_f32(opts.timeout));
+            Client::connect(&config)
+                .await
+                .expect("Unable to connect to the elbus broker")
+        }};
+    }
     macro_rules! prepare_rpc_call {
         ($c: expr, $client: expr) => {{
             let rpc = RpcClient::new($client, DummyHandlers {});
@@ -331,39 +363,48 @@ async fn main() {
         }};
     }
     match opts.command {
-        Command::Broker(op) => match op {
-            BrokerCommand::Clients => {
-                let mut rpc = RpcClient::new(client, DummyHandlers {});
-                let result = rpc
-                    .call(".broker", "list_clients", empty_payload!())
-                    .await
-                    .unwrap();
-                let mut clients: ClientList = rmp_serde::from_read_ref(result.payload()).unwrap();
-                clients.clients.sort();
-                let mut table = ctable(vec!["name", "type", "source", "port"]);
-                for c in clients.clients {
-                    if c.name != name {
-                        table.add_row(row![
-                            c.name,
-                            c.tp,
-                            c.source.unwrap_or_default(),
-                            c.port.unwrap_or_default()
-                        ]);
+        Command::Broker(op) => {
+            let client = client!(&client_name);
+            match op {
+                BrokerCommand::Clients => {
+                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let result = rpc
+                        .call(".broker", "list_clients", empty_payload!())
+                        .await
+                        .unwrap();
+                    let mut clients: ClientList =
+                        rmp_serde::from_read_ref(result.payload()).unwrap();
+                    clients.clients.sort();
+                    let mut table = ctable(vec!["name", "type", "source", "port"]);
+                    for c in clients.clients {
+                        if c.name != client_name {
+                            table.add_row(row![
+                                c.name,
+                                c.tp,
+                                c.source.unwrap_or_default(),
+                                c.port.unwrap_or_default()
+                            ]);
+                        }
                     }
+                    table.printstd();
                 }
-                table.printstd();
             }
-        },
+        }
         Command::Listen(cmd) => {
+            let mut client = client!(&client_name);
             subscribe_topics(&mut client, &cmd.topics).await.unwrap();
             sep();
             let rx = client.take_event_channel().unwrap();
-            println!("Listening to messages for {} ...", name.cyan().bold());
+            println!(
+                "Listening to messages for {} ...",
+                client_name.cyan().bold()
+            );
             while let Ok(frame) = rx.recv().await {
                 print_frame(&frame);
             }
         }
         Command::r#Send(cmd) => {
+            let mut client = client!(&client_name);
             let payload = get_payload(&cmd.payload).await;
             let fut = if cmd.target.contains(&['*', '?'][..]) {
                 client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
@@ -374,6 +415,7 @@ async fn main() {
             ok!();
         }
         Command::Publish(cmd) => {
+            let mut client = client!(&client_name);
             let payload = get_payload(&cmd.payload).await;
             client
                 .publish(&cmd.topic, payload.into(), QoS::Processed)
@@ -385,48 +427,130 @@ async fn main() {
                 .unwrap();
             ok!();
         }
-        Command::Rpc(r) => match r {
-            RpcCommand::Listen(cmd) => {
-                subscribe_topics(&mut client, &cmd.topics).await.unwrap();
-                let rpc = RpcClient::new(client, Handlers {});
-                sep();
-                println!("Listening to RPC messages for {} ...", name.cyan().bold());
-                let sleep_step = Duration::from_millis(100);
-                while rpc.is_connected() {
-                    sleep(sleep_step).await;
+        Command::Rpc(r) => {
+            let mut client = client!(&client_name);
+            match r {
+                RpcCommand::Listen(cmd) => {
+                    subscribe_topics(&mut client, &cmd.topics).await.unwrap();
+                    let rpc = RpcClient::new(client, Handlers {});
+                    sep();
+                    println!(
+                        "Listening to RPC messages for {} ...",
+                        client_name.cyan().bold()
+                    );
+                    let sleep_step = Duration::from_millis(100);
+                    while rpc.is_connected() {
+                        sleep(sleep_step).await;
+                    }
+                }
+                RpcCommand::Notify(cmd) => {
+                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let payload = get_payload(&cmd.payload).await;
+                    rpc.notify(&cmd.target, payload.into(), QoS::Processed)
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    ok!();
+                }
+                RpcCommand::Call0(cmd) => {
+                    let (rpc, payload) = prepare_rpc_call!(cmd, client);
+                    rpc.call0(&cmd.target, &cmd.method, payload.into())
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    ok!();
+                }
+                RpcCommand::Call(cmd) => {
+                    let (mut rpc, payload) = prepare_rpc_call!(cmd, client);
+                    let result = rpc
+                        .call(&cmd.target, &cmd.method, payload.into())
+                        .await
+                        .unwrap();
+                    print_payload(result.payload());
                 }
             }
-            RpcCommand::Notify(cmd) => {
-                let mut rpc = RpcClient::new(client, DummyHandlers {});
-                let payload = get_payload(&cmd.payload).await;
-                rpc.notify(&cmd.target, payload.into(), QoS::Processed)
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .await
-                    .unwrap()
-                    .unwrap();
-                ok!();
+        }
+        Command::Benchmark(cmd) => {
+            let iters_worker = cmd.iters / cmd.workers;
+            println!(
+                "Starting benchmark, {} worker(s), {} iters, {} iters/worker, {} byte(s) payload",
+                cmd.workers.to_string().blue().bold(),
+                fnum!(cmd.iters).yellow(),
+                fnum!(iters_worker).bold(),
+                fnum!(cmd.payload_size).cyan()
+            );
+            let data = Arc::new(vec![0xee; cmd.payload_size]);
+            let mut clients = Vec::new();
+            let mut ecs = Vec::new();
+            let mut cnns = Vec::new();
+            for w in 0..cmd.workers {
+                let cname = format!("{}-{}", client_name, w + 1);
+                let cname_null = format!("{}-{}-null", client_name, w + 1);
+                let mut client = client!(&cname);
+                let rx = client.take_event_channel().unwrap();
+                clients.push(Arc::new(Mutex::new(client)));
+                ecs.push(Arc::new(Mutex::new(rx)));
+                cnns.push(cname_null);
             }
-            RpcCommand::Call0(cmd) => {
-                let (rpc, payload) = prepare_rpc_call!(cmd, client);
-                rpc.call0(&cmd.target, &cmd.method, payload.into())
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .await
-                    .unwrap()
-                    .unwrap();
-                ok!();
+            for q in vec![(QoS::No, "no"), (QoS::Processed, "processed")] {
+                let qos = q.0;
+                staged_benchmark_start!(&format!("send.qos.{}", q.1));
+                let mut futs = Vec::new();
+                for w in 0..cmd.workers {
+                    let client = clients[w as usize].clone();
+                    let cnn = cnns[w as usize].clone();
+                    let payload = data.clone();
+                    futs.push(tokio::spawn(async move {
+                        let mut client = client.lock().await;
+                        for _ in 0..iters_worker {
+                            let result = client
+                                .send(&cnn, payload.clone().into(), qos)
+                                .await
+                                .unwrap();
+                            if qos == QoS::Processed {
+                                let _r = result.unwrap().await.unwrap();
+                            }
+                        }
+                    }));
+                }
+                for f in futs {
+                    f.await.unwrap();
+                }
+                staged_benchmark_finish_current!(cmd.iters);
             }
-            RpcCommand::Call(cmd) => {
-                let (mut rpc, payload) = prepare_rpc_call!(cmd, client);
-                let result = rpc
-                    .call(&cmd.target, &cmd.method, payload.into())
-                    .await
-                    .unwrap();
-                print_payload(result.payload());
+            staged_benchmark_start!("send+recv.qos.processed");
+            let mut futs = Vec::new();
+            for w in 0..cmd.workers {
+                let client = clients[w as usize].clone();
+                let crx = ecs[w as usize].clone();
+                let payload = data.clone();
+                futs.push(tokio::spawn(async move {
+                    let mut client = client.lock().await;
+                    let target = client.get_name().to_owned();
+                    for _ in 0..iters_worker {
+                        //let result = client
+                        //.send(&target, payload.clone().into(), QoS::Processed)
+                        //.await
+                        //.unwrap();
+                        //result.unwrap().await;
+                    }
+                }));
+                //futs.push(tokio::spawn(async move {
+                //let mut cnt = 0;
+                //while cnt < iters_per
+                //}));
             }
-        },
+            for f in futs {
+                f.await.unwrap();
+            }
+            staged_benchmark_finish_current!(cmd.iters);
+            staged_benchmark_print!();
+        }
     }
 }
