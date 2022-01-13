@@ -53,7 +53,7 @@ rpc = ["log", "rmp-serde", "async-trait", "serde_json"]
 serialization = ["serde"]
 cli = ["ipc", "rpc", "serialization", "colored", "clap",
   "clap_derive", "env_logger", "bma-benchmark", "prettytable-rs",
-  "hostname", "hex", "num-format", "serde-value"]
+  "hostname", "hex", "num-format", "serde-value", "jemallocator"]
 
 [lib]
 name = "elbus"

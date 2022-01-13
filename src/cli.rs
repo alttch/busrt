@@ -14,6 +14,9 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::time::sleep;
 
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 #[macro_use]
 extern crate prettytable;
 
