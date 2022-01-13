@@ -101,6 +101,10 @@ CPU: AMD Ryzen 9 5950X
 Broker: 8 workers, clients: 10, payload size: 500 bytes, local IPC (single unix
 socket), totals:
 
+```shell
+elbus /tmp/elbus.sock benchmark -w20 --payload-size 500
+```
+
 | stage                    | iters/s     |
 |--------------------------|-------------|
 | rpc.call                 | 358\_513    |
