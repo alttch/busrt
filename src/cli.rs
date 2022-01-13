@@ -307,20 +307,169 @@ async fn get_payload(candidate: &Option<String>) -> Vec<u8> {
     }
 }
 
+async fn create_client(opts: &Opts, name: &str) -> Client {
+    let config = Config::new(&opts.path, name)
+        .read_buf(opts.read_buf)
+        .queue_size(opts.queue_size)
+        .timeout(Duration::from_secs_f32(opts.timeout));
+    Client::connect(&config)
+        .await
+        .expect("Unable to connect to the elbus broker")
+}
+
+macro_rules! bm_finish {
+    ($iters: expr, $futs: expr) => {
+        while let Some(f) = $futs.pop() {
+            f.await.unwrap();
+        }
+        staged_benchmark_finish_current!($iters);
+    };
+}
+
+async fn benchmark_client(
+    opts: &Opts,
+    client_name: &str,
+    iters: u32,
+    workers: u32,
+    payload_size: usize,
+) {
+    let iters_worker = iters / workers;
+    let data = Arc::new(vec![0xee; payload_size]);
+    let mut clients = Vec::new();
+    let mut ecs = Vec::new();
+    let mut cnns = Vec::new();
+    let mut futs = Vec::new();
+    for w in 0..workers {
+        let cname = format!("{}-{}", client_name, w + 1);
+        let cname_null = format!("{}-{}-null", client_name, w + 1);
+        let mut client = create_client(&opts, &cname).await;
+        let rx = client.take_event_channel().unwrap();
+        clients.push(Arc::new(Mutex::new(client)));
+        ecs.push(Arc::new(Mutex::new(rx)));
+        cnns.push(cname_null);
+    }
+    macro_rules! clear {
+        () => {
+            for e in &ecs {
+                let rx = e.lock().await;
+                while !rx.is_empty() {
+                    let _r = rx.recv().await;
+                }
+            }
+        };
+    }
+    macro_rules! spawn_sender {
+        ($client: expr, $target: expr, $payload: expr, $qos: expr) => {
+            futs.push(tokio::spawn(async move {
+                let mut client = $client.lock().await;
+                for _ in 0..iters_worker {
+                    let result = client
+                        .send(&$target, $payload.clone().into(), $qos)
+                        .await
+                        .unwrap();
+                    if $qos == QoS::Processed {
+                        let _r = result.unwrap().await.unwrap();
+                    }
+                }
+            }));
+        };
+    }
+    for q in vec![(QoS::No, "no"), (QoS::Processed, "processed")] {
+        let qos = q.0;
+        clear!();
+        staged_benchmark_start!(&format!("send.qos.{}", q.1));
+        for w in 0..workers {
+            let client = clients[w as usize].clone();
+            let payload = data.clone();
+            let target = cnns[w as usize].clone();
+            spawn_sender!(client, target, payload, qos);
+        }
+        bm_finish!(iters, futs);
+    }
+    for q in vec![(QoS::No, "no"), (QoS::Processed, "processed")] {
+        let qos = q.0;
+        clear!();
+        staged_benchmark_start!(&format!("send+recv.qos.{}", q.1));
+        for w in 0..workers {
+            let client = clients[w as usize].clone();
+            let target = client.lock().await.get_name().to_owned();
+            let payload = data.clone();
+            spawn_sender!(client, target, payload, qos);
+            let crx = ecs[w as usize].clone();
+            futs.push(tokio::spawn(async move {
+                let rx = crx.lock().await;
+                let mut cnt = 0;
+                while cnt < iters_worker {
+                    let _ = rx.recv().await;
+                    cnt += 1;
+                }
+            }));
+        }
+        bm_finish!(iters, futs);
+    }
+}
+
+async fn benchmark_rpc(
+    opts: &Opts,
+    client_name: &str,
+    iters: u32,
+    workers: u32,
+    payload_size: usize,
+) {
+    let iters_worker = iters / workers;
+    let data = Arc::new(vec![0xee; payload_size]);
+    let mut rpcs = Vec::new();
+    let mut cnns = Vec::new();
+    let mut futs = Vec::new();
+    for w in 0..workers {
+        let cname = format!("{}-{}", client_name, w + 1);
+        let cname_null = format!("{}-{}-null", client_name, w + 1);
+        let client = create_client(&opts, &cname).await;
+        let rpc = RpcClient::new(client, DummyHandlers {});
+        rpcs.push(Arc::new(Mutex::new(rpc)));
+        cnns.push(cname_null);
+    }
+    macro_rules! spawn_caller {
+        ($rpc: expr, $target: expr, $payload: expr) => {
+            futs.push(tokio::spawn(async move {
+                let rpc = $rpc.lock().await;
+                for _ in 0..iters_worker {
+                    let result = rpc
+                        .call0(&$target, "test", $payload.clone().into())
+                        .await
+                        .unwrap();
+                    let _r = result.unwrap().await.unwrap();
+                }
+            }));
+        };
+    }
+    staged_benchmark_start!(&format!("rpc.call0"));
+    for w in 0..workers {
+        let rpc = rpcs[w as usize].clone();
+        let payload = data.clone();
+        let target = cnns[w as usize].clone();
+        spawn_caller!(rpc, target, payload);
+    }
+    bm_finish!(iters, futs);
+}
+
 #[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
     let opts = Opts::parse();
-    let client_name = opts.name.unwrap_or_else(|| {
-        format!(
-            "cli.{}.{}",
-            hostname::get()
-                .expect("Unable to get hostname")
-                .to_str()
-                .expect("Unable to parse hostname"),
-            std::process::id()
-        )
-    });
+    let client_name = opts.name.as_ref().map_or_else(
+        || {
+            format!(
+                "cli.{}.{}",
+                hostname::get()
+                    .expect("Unable to get hostname")
+                    .to_str()
+                    .expect("Unable to parse hostname"),
+                std::process::id()
+            )
+        },
+        ToOwned::to_owned,
+    );
     if !opts.silent {
         env_logger::Builder::new()
             .target(env_logger::Target::Stdout)
@@ -335,17 +484,6 @@ async fn main() {
         "Connecting to {}, using service name {}",
         opts.path, client_name
     );
-    macro_rules! client {
-        ($name: expr) => {{
-            let config = Config::new(&opts.path, $name)
-                .read_buf(opts.read_buf)
-                .queue_size(opts.queue_size)
-                .timeout(Duration::from_secs_f32(opts.timeout));
-            Client::connect(&config)
-                .await
-                .expect("Unable to connect to the elbus broker")
-        }};
-    }
     macro_rules! prepare_rpc_call {
         ($c: expr, $client: expr) => {{
             let rpc = RpcClient::new($client, DummyHandlers {});
@@ -363,8 +501,8 @@ async fn main() {
         }};
     }
     match opts.command {
-        Command::Broker(op) => {
-            let client = client!(&client_name);
+        Command::Broker(ref op) => {
+            let client = create_client(&opts, &client_name).await;
             match op {
                 BrokerCommand::Clients => {
                     let mut rpc = RpcClient::new(client, DummyHandlers {});
@@ -390,8 +528,8 @@ async fn main() {
                 }
             }
         }
-        Command::Listen(cmd) => {
-            let mut client = client!(&client_name);
+        Command::Listen(ref cmd) => {
+            let mut client = create_client(&opts, &client_name).await;
             subscribe_topics(&mut client, &cmd.topics).await.unwrap();
             sep();
             let rx = client.take_event_channel().unwrap();
@@ -403,8 +541,8 @@ async fn main() {
                 print_frame(&frame);
             }
         }
-        Command::r#Send(cmd) => {
-            let mut client = client!(&client_name);
+        Command::r#Send(ref cmd) => {
+            let mut client = create_client(&opts, &client_name).await;
             let payload = get_payload(&cmd.payload).await;
             let fut = if cmd.target.contains(&['*', '?'][..]) {
                 client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
@@ -414,8 +552,8 @@ async fn main() {
             fut.await.unwrap().unwrap().await.unwrap().unwrap();
             ok!();
         }
-        Command::Publish(cmd) => {
-            let mut client = client!(&client_name);
+        Command::Publish(ref cmd) => {
+            let mut client = create_client(&opts, &client_name).await;
             let payload = get_payload(&cmd.payload).await;
             client
                 .publish(&cmd.topic, payload.into(), QoS::Processed)
@@ -427,8 +565,8 @@ async fn main() {
                 .unwrap();
             ok!();
         }
-        Command::Rpc(r) => {
-            let mut client = client!(&client_name);
+        Command::Rpc(ref r) => {
+            let mut client = create_client(&opts, &client_name).await;
             match r {
                 RpcCommand::Listen(cmd) => {
                     subscribe_topics(&mut client, &cmd.topics).await.unwrap();
@@ -476,89 +614,30 @@ async fn main() {
                 }
             }
         }
-        Command::Benchmark(cmd) => {
-            let iters_worker = cmd.iters / cmd.workers;
+        Command::Benchmark(ref cmd) => {
             println!(
                 "Starting benchmark, {} worker(s), {} iters, {} iters/worker, {} byte(s) payload",
                 cmd.workers.to_string().blue().bold(),
                 fnum!(cmd.iters).yellow(),
-                fnum!(iters_worker).bold(),
+                fnum!(cmd.iters / cmd.workers).bold(),
                 fnum!(cmd.payload_size).cyan()
             );
-            let data = Arc::new(vec![0xee; cmd.payload_size]);
-            let mut clients = Vec::new();
-            let mut ecs = Vec::new();
-            let mut cnns = Vec::new();
-            for w in 0..cmd.workers {
-                let cname = format!("{}-{}", client_name, w + 1);
-                let cname_null = format!("{}-{}-null", client_name, w + 1);
-                let mut client = client!(&cname);
-                let rx = client.take_event_channel().unwrap();
-                clients.push(Arc::new(Mutex::new(client)));
-                ecs.push(Arc::new(Mutex::new(rx)));
-                cnns.push(cname_null);
-            }
-            for q in vec![(QoS::No, "no"), (QoS::Processed, "processed")] {
-                let qos = q.0;
-                staged_benchmark_start!(&format!("send.qos.{}", q.1));
-                let mut futs = Vec::new();
-                for w in 0..cmd.workers {
-                    let client = clients[w as usize].clone();
-                    let cnn = cnns[w as usize].clone();
-                    let payload = data.clone();
-                    futs.push(tokio::spawn(async move {
-                        let mut client = client.lock().await;
-                        for _ in 0..iters_worker {
-                            let result = client
-                                .send(&cnn, payload.clone().into(), qos)
-                                .await
-                                .unwrap();
-                            if qos == QoS::Processed {
-                                let _r = result.unwrap().await.unwrap();
-                            }
-                        }
-                    }));
-                }
-                for f in futs {
-                    f.await.unwrap();
-                }
-                staged_benchmark_finish_current!(cmd.iters);
-            }
-            for q in vec![(QoS::No, "no"), (QoS::Processed, "processed")] {
-                let qos = q.0;
-                staged_benchmark_start!(&format!("send+recv.qos.{}", q.1));
-                let mut futs = Vec::new();
-                for w in 0..cmd.workers {
-                    let client = clients[w as usize].clone();
-                    let crx = ecs[w as usize].clone();
-                    let payload = data.clone();
-                    futs.push(tokio::spawn(async move {
-                        let mut client = client.lock().await;
-                        let target = client.get_name().to_owned();
-                        for _ in 0..iters_worker {
-                            let result = client
-                                .send(&target, payload.clone().into(), qos)
-                                .await
-                                .unwrap();
-                            if qos == QoS::Processed {
-                                result.unwrap().await.unwrap().unwrap();
-                            }
-                        }
-                    }));
-                    futs.push(tokio::spawn(async move {
-                        let rx = crx.lock().await;
-                        let mut cnt = 0;
-                        while cnt < iters_worker {
-                            let _ = rx.recv().await;
-                            cnt += 1;
-                        }
-                    }));
-                }
-                for f in futs {
-                    f.await.unwrap();
-                }
-                staged_benchmark_finish_current!(cmd.iters);
-            }
+            benchmark_client(
+                &opts,
+                &client_name,
+                cmd.iters,
+                cmd.workers,
+                cmd.payload_size,
+            )
+            .await;
+            benchmark_rpc(
+                &opts,
+                &client_name,
+                cmd.iters,
+                cmd.workers,
+                cmd.payload_size,
+            )
+            .await;
             staged_benchmark_print!();
         }
     }
