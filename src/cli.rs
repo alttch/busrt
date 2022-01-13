@@ -178,7 +178,8 @@ macro_rules! ok {
     };
 }
 
-async fn subscribe_topics(client: &mut Client, topics: &Vec<String>) -> Result<(), Error> {
+#[allow(clippy::needless_for_each)]
+async fn subscribe_topics(client: &mut Client, topics: &[String]) -> Result<(), Error> {
     topics
         .iter()
         .for_each(|t| info!("subscribing to the topic {}", t.yellow()));
@@ -245,6 +246,17 @@ impl RpcHandlers for Handlers {
     }
 }
 
+async fn get_payload(candidate: &Option<String>) -> Vec<u8> {
+    if let Some(p) = candidate {
+        p.as_bytes().to_vec()
+    } else {
+        let mut stdin = tokio::io::stdin();
+        let mut buf: Vec<u8> = Vec::new();
+        stdin.read_to_end(&mut buf).await.unwrap();
+        buf
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
@@ -272,18 +284,6 @@ async fn main() {
     let mut client = Client::connect(&config)
         .await
         .expect("Unable to connect to the elbus broker");
-    macro_rules! get_payload {
-        ($p: expr) => {
-            if let Some(p) = $p {
-                p.as_bytes().to_vec()
-            } else {
-                let mut stdin = tokio::io::stdin();
-                let mut buf: Vec<u8> = Vec::new();
-                stdin.read_to_end(&mut buf).await.unwrap();
-                buf
-            }
-        };
-    }
     match opts.command {
         Command::Broker(op) => match op {
             BrokerCommand::Clients => {
@@ -318,7 +318,7 @@ async fn main() {
             }
         }
         Command::r#Send(cmd) => {
-            let payload = get_payload!(cmd.payload);
+            let payload = get_payload(&cmd.payload).await;
             let fut = if cmd.target.contains(&['*', '?'][..]) {
                 client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
             } else {
@@ -328,7 +328,7 @@ async fn main() {
             ok!();
         }
         Command::Publish(cmd) => {
-            let payload = get_payload!(cmd.payload);
+            let payload = get_payload(&cmd.payload).await;
             client
                 .publish(&cmd.topic, payload.into(), QoS::Processed)
                 .await
