@@ -84,6 +84,7 @@ impl Config {
 }
 
 pub struct Client {
+    name: String,
     writer: Writer,
     reader_fut: JoinHandle<()>,
     frame_id: u32,
@@ -223,6 +224,7 @@ impl Client {
             (Writer::Tcp(writer), reader_fut, rx)
         };
         Ok(Self {
+            name: config.name.to_owned(),
             writer,
             reader_fut,
             frame_id: 0,
@@ -333,6 +335,10 @@ impl AsyncClient for Client {
     #[inline]
     fn get_timeout(&self) -> Option<Duration> {
         Some(self.timeout)
+    }
+    #[inline]
+    fn get_name(&self) -> &str {
+        self.name.as_str()
     }
 }
 

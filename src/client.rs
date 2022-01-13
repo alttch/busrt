@@ -42,6 +42,7 @@ pub trait AsyncClient: Send + Sync {
     fn is_connected(&self) -> bool;
     fn get_connected_beacon(&self) -> Option<Arc<atomic::AtomicBool>>;
     fn get_timeout(&self) -> Option<Duration>;
+    fn get_name(&self) -> &str;
 }
 
 #[macro_export]

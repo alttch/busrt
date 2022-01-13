@@ -136,6 +136,7 @@ macro_rules! publish {
 }
 
 pub struct Client {
+    name: String,
     client: Arc<ElbusClient>,
     db: Arc<BrokerDb>,
     rx: Option<EventChannel>,
@@ -266,6 +267,10 @@ impl AsyncClient for Client {
     #[inline]
     fn get_connected_beacon(&self) -> Option<Arc<atomic::AtomicBool>> {
         None
+    }
+    #[inline]
+    fn get_name(&self) -> &str {
+        self.name.as_str()
     }
 }
 
@@ -588,6 +593,7 @@ impl Broker {
         let client = Arc::new(c);
         self.db.register_client(client.clone())?;
         Ok(Client {
+            name: name.to_owned(),
             client,
             db: self.db.clone(),
             rx: Some(rx),
