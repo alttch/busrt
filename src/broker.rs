@@ -436,7 +436,7 @@ impl RpcHandlers for BrokerRpcHandlers {
             rmp_serde::from_read_ref(event.payload())?
         };
         match event.parse_method()? {
-            "list_clients" => {
+            "client.list" => {
                 if !params.is_empty() {
                     return Err(RpcError::params());
                 }
@@ -454,6 +454,7 @@ impl RpcHandlers for BrokerRpcHandlers {
                 clients.sort();
                 Ok(Some(rmp_serde::to_vec_named(&ClientList { clients })?))
             }
+            "benchmark.test" => Ok(Some(event.payload().to_vec())),
             _ => Err(RpcError::method()),
         }
     }

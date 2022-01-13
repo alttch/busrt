@@ -15,7 +15,8 @@ Broker API
 When **broker-api** feature is enabled, the following default RPC methods are
 available at **.broker** automatically:
 
-* **list_clients()** - list all connected clients
+* **client.list()** - list all connected clients
+* **benchmark.test(payload)** - test method, returns the payload as-is
 
 The payload exchange format (call params / replies) is MessagePack.
 
