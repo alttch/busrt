@@ -1,10 +1,10 @@
 use clap::Clap;
 use colored::Colorize;
 use elbus::client::AsyncClient;
+use elbus::common::ClientList;
 use elbus::ipc::{Client, Config};
 use elbus::rpc::{DummyHandlers, Rpc, RpcClient};
 use elbus::{empty_payload, Error, QoS};
-use elbus::common::ClientList;
 use log::info;
 use num_format::{Locale, ToFormattedString};
 use serde_value::Value;
@@ -190,7 +190,7 @@ async fn main() {
     let config = Config::new(&opts.path, &name);
     let mut client = Client::connect(&config)
         .await
-        .expect("Unable to connect to elbus");
+        .expect("Unable to connect to the elbus broker");
     macro_rules! get_payload {
         ($p: expr) => {
             if let Some(p) = $p {
