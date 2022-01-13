@@ -23,8 +23,7 @@ log = { version = "0.4.14", optional = true }
 syslog = { version = "5.0.0", optional = true }
 chrono = { version = "0.4.19", optional = true }
 colored = { version = "2", optional = true }
-clap = { version = "=3.0.0-beta.2", optional = true }
-clap_derive = { version = "=3.0.0-beta.2", optional = true }
+clap = { version = "3.0.7", features = ["derive"], optional = true }
 submap = { version = "0.1.2", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
 jemallocator = { version = "0.3.0", optional = true }
@@ -44,7 +43,7 @@ num-format = { version = "0.4.0", optional = true }
 serde-value = { version = "0.7.0", optional = true }
 
 [features]
-server = ["log", "syslog", "chrono", "colored", "clap", "clap_derive",
+server = ["log", "syslog", "chrono", "colored", "clap",
           "lazy_static", "jemallocator", "fork", "broker"]
 broker = ["log", "submap", "async-trait", "unix-named-pipe"]
 broker-api = ["broker", "rpc", "serialization"]
@@ -52,7 +51,7 @@ ipc = ["log", "async-trait"]
 rpc = ["log", "rmp-serde", "async-trait", "serde_json"]
 serialization = ["serde"]
 cli = ["ipc", "rpc", "serialization", "colored", "clap",
-  "clap_derive", "env_logger", "bma-benchmark", "prettytable-rs",
+  "env_logger", "bma-benchmark", "prettytable-rs",
   "hostname", "hex", "num-format", "serde-value", "jemallocator"]
 
 [lib]

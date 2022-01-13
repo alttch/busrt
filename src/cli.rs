@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use clap::Clap;
+use clap::{ArgEnum, Parser, Subcommand};
 use colored::Colorize;
 use elbus::client::AsyncClient;
 use elbus::common::ClientList;
@@ -34,56 +34,56 @@ where
     }
 }
 
-#[derive(Clap)]
+#[derive(ArgEnum, Clone)]
 enum BrokerCommand {
-    #[clap(about = "List registered clients")]
+    //#[clap(help = "List registered clients")]
     Clients,
 }
 
-#[derive(Clap)]
+#[derive(Parser, Clone)]
 struct ListenCommand {
-    #[clap(short = 't', long = "topics", about = "Subscribe to topics")]
+    #[clap(short = 't', long = "topics", help = "Subscribe to topics")]
     topics: Vec<String>,
 }
 
-#[derive(Clap)]
+#[derive(Parser, Clone)]
 struct SendCommand {
     #[clap()]
     target: String,
-    #[clap(about = "payload string or empty for stdin")]
+    #[clap(help = "payload string or empty for stdin")]
     payload: Option<String>,
 }
 
-#[derive(Clap)]
+#[derive(Parser, Clone)]
 struct PublishCommand {
     #[clap()]
     topic: String,
-    #[clap(about = "payload string or empty for stdin")]
+    #[clap(help = "payload string or empty for stdin")]
     payload: Option<String>,
 }
 
-#[derive(Clap)]
+#[derive(ArgEnum, Clone)]
 enum RpcCommand {
     Listen(RpcListenCommand),
     Notify(SendCommand),
 }
 
-#[derive(Clap)]
+#[derive(Parser, Clone)]
 struct RpcListenCommand {
-    #[clap(short = 't', long = "topics", about = "Subscribe to topics")]
+    #[clap(short = 't', long = "topics", help = "Subscribe to topics")]
     topics: Vec<String>,
 }
 
-#[derive(Clap)]
+#[derive(Clone, Subcommand)]
 enum Command {
     Broker(BrokerCommand),
-    Listen(ListenCommand),
-    r#Send(SendCommand),
-    Publish(PublishCommand),
-    Rpc(RpcCommand),
+    //Listen(ListenCommand),
+    //r#Send(SendCommand),
+    //Publish(PublishCommand),
+    //Rpc(RpcCommand),
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version = elbus::VERSION, author = elbus::AUTHOR)]
 struct Opts {
     #[clap(name = "socket path or host:port")]
@@ -316,60 +316,60 @@ async fn main() {
                 table.printstd();
             }
         },
-        Command::Listen(cmd) => {
-            subscribe_topics(&mut client, &cmd.topics).await.unwrap();
-            sep();
-            let rx = client.take_event_channel().unwrap();
-            println!("Listening to messages for {} ...", name.cyan().bold());
-            while let Ok(frame) = rx.recv().await {
-                print_frame(&frame);
-            }
-        }
-        Command::r#Send(cmd) => {
-            let payload = get_payload(&cmd.payload).await;
-            let fut = if cmd.target.contains(&['*', '?'][..]) {
-                client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
-            } else {
-                client.send(&cmd.target, payload.into(), QoS::Processed)
-            };
-            fut.await.unwrap().unwrap().await.unwrap().unwrap();
-            ok!();
-        }
-        Command::Publish(cmd) => {
-            let payload = get_payload(&cmd.payload).await;
-            client
-                .publish(&cmd.topic, payload.into(), QoS::Processed)
-                .await
-                .unwrap()
-                .unwrap()
-                .await
-                .unwrap()
-                .unwrap();
-            ok!();
-        }
-        Command::Rpc(r) => match r {
-            RpcCommand::Listen(cmd) => {
-                subscribe_topics(&mut client, &cmd.topics).await.unwrap();
-                let rpc = RpcClient::new(client, Handlers {});
-                sep();
-                println!("Listening to RPC messages for {} ...", name.cyan().bold());
-                let sleep_step = Duration::from_millis(100);
-                while rpc.is_connected() {
-                    sleep(sleep_step).await;
-                }
-            }
-            RpcCommand::Notify(cmd) => {
-                let mut rpc = RpcClient::new(client, DummyHandlers {});
-                let payload = get_payload(&cmd.payload).await;
-                rpc.notify(&cmd.target, payload.into(), QoS::Processed)
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .await
-                    .unwrap()
-                    .unwrap();
-                ok!();
-            }
-        },
+        //Command::Listen(cmd) => {
+        //subscribe_topics(&mut client, &cmd.topics).await.unwrap();
+        //sep();
+        //let rx = client.take_event_channel().unwrap();
+        //println!("Listening to messages for {} ...", name.cyan().bold());
+        //while let Ok(frame) = rx.recv().await {
+        //print_frame(&frame);
+        //}
+        //}
+        //Command::r#Send(cmd) => {
+        //let payload = get_payload(&cmd.payload).await;
+        //let fut = if cmd.target.contains(&['*', '?'][..]) {
+        //client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
+        //} else {
+        //client.send(&cmd.target, payload.into(), QoS::Processed)
+        //};
+        //fut.await.unwrap().unwrap().await.unwrap().unwrap();
+        //ok!();
+        //}
+        //Command::Publish(cmd) => {
+        //let payload = get_payload(&cmd.payload).await;
+        //client
+        //.publish(&cmd.topic, payload.into(), QoS::Processed)
+        //.await
+        //.unwrap()
+        //.unwrap()
+        //.await
+        //.unwrap()
+        //.unwrap();
+        //ok!();
+        //}
+        //Command::Rpc(r) => match r {
+        //RpcCommand::Listen(cmd) => {
+        //subscribe_topics(&mut client, &cmd.topics).await.unwrap();
+        //let rpc = RpcClient::new(client, Handlers {});
+        //sep();
+        //println!("Listening to RPC messages for {} ...", name.cyan().bold());
+        //let sleep_step = Duration::from_millis(100);
+        //while rpc.is_connected() {
+        //sleep(sleep_step).await;
+        //}
+        //}
+        //RpcCommand::Notify(cmd) => {
+        //let mut rpc = RpcClient::new(client, DummyHandlers {});
+        //let payload = get_payload(&cmd.payload).await;
+        //rpc.notify(&cmd.target, payload.into(), QoS::Processed)
+        //.await
+        //.unwrap()
+        //.unwrap()
+        //.await
+        //.unwrap()
+        //.unwrap();
+        //ok!();
+        //}
+        //},
     }
 }

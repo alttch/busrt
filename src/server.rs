@@ -5,7 +5,7 @@ extern crate lazy_static;
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 use chrono::prelude::*;
-use clap::Clap;
+use clap::Parser;
 use colored::Colorize;
 use log::{error, info, trace};
 use log::{Level, LevelFilter};
@@ -61,22 +61,22 @@ fn set_verbose_logger(filter: LevelFilter) {
         .unwrap();
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct Opts {
     #[clap(
         short = 'B',
         long = "bind",
         required = true,
-        about = "Unix socket path, IP:PORT or fifo:path, can be specified multiple times"
+        help = "Unix socket path, IP:PORT or fifo:path, can be specified multiple times"
     )]
     path: Vec<String>,
     #[clap(short = 'P', long = "pid-file")]
     pid_file: Option<String>,
-    #[clap(short = 'v', about = "Verbose logging")]
+    #[clap(short = 'v', help = "Verbose logging")]
     verbose: bool,
     #[clap(short = 'D')]
     daemonize: bool,
-    #[clap(long = "log-syslog", about = "Force log to syslog")]
+    #[clap(long = "log-syslog", help = "Force log to syslog")]
     log_syslog: bool,
     #[clap(short = 'w', default_value = "4")]
     workers: usize,
@@ -85,13 +85,13 @@ struct Opts {
     #[clap(
         long = "buf-size",
         default_value = "16384",
-        about = "I/O buffer size, per client"
+        help = "I/O buffer size, per client"
     )]
     buf_size: usize,
     #[clap(
         long = "queue-size",
         default_value = "8192",
-        about = "frame queue size, per client"
+        help = "frame queue size, per client"
     )]
     queue_size: usize,
 }
