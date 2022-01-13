@@ -247,14 +247,18 @@ impl RpcHandlers for Handlers {
     }
 }
 
+async fn read_stdin() -> Vec<u8> {
+    let mut stdin = tokio::io::stdin();
+    let mut buf: Vec<u8> = Vec::new();
+    stdin.read_to_end(&mut buf).await.unwrap();
+    buf
+}
+
 async fn get_payload(candidate: &Option<String>) -> Vec<u8> {
     if let Some(p) = candidate {
         p.as_bytes().to_vec()
     } else {
-        let mut stdin = tokio::io::stdin();
-        let mut buf: Vec<u8> = Vec::new();
-        stdin.read_to_end(&mut buf).await.unwrap();
-        buf
+        read_stdin().await
     }
 }
 
