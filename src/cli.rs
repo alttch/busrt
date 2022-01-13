@@ -9,6 +9,7 @@ use num_format::{Locale, ToFormattedString};
 use serde::Deserialize;
 use serde_value::Value;
 use std::collections::BTreeMap;
+use tokio::io::AsyncReadExt;
 
 #[macro_use]
 extern crate prettytable;
@@ -21,6 +22,7 @@ impl<T> ToDebugString<T> for T
 where
     T: std::fmt::Debug,
 {
+    #[inline]
     fn to_debug_string(&self) -> String {
         format!("{:?}", self)
     }
@@ -34,15 +36,32 @@ enum BrokerCommand {
 
 #[derive(Clap)]
 struct ListenCommand {
-    #[clap(short = 's', long = "subscribe", about = "Subscribe to topics")]
-    subscribe: Vec<String>,
+    #[clap(short = 't', long = "topics", about = "Subscribe to topics")]
+    topics: Vec<String>,
+}
+
+#[derive(Clap)]
+struct SendCommand {
+    #[clap()]
+    target: String,
+    #[clap(about = "payload string or empty for stdin")]
+    payload: Option<String>,
+}
+
+#[derive(Clap)]
+struct PublishCommand {
+    #[clap()]
+    topic: String,
+    #[clap(about = "payload string or empty for stdin")]
+    payload: Option<String>,
 }
 
 #[derive(Clap)]
 enum Command {
     Broker(BrokerCommand),
     Listen(ListenCommand),
-    //Send(SendCommand),
+    r#Send(SendCommand),
+    Publish(PublishCommand),
     //Rpc(RpcCommand),
 }
 
@@ -114,13 +133,14 @@ fn print_payload(payload: &[u8]) {
             println!("{}", s);
         } else {
             for (k, v) in map {
-                println!("{:?}: {}", k, v.to_debug_string().blue())
+                println!("{:?}: {}", k, v.to_debug_string().blue());
             }
         }
     } else {
         let (p, dots) = if payload.len() > 256 {
             (&payload[..256], "...")
         } else {
+            #[allow(clippy::redundant_slicing)]
             (&payload[..], "")
         };
         println!("HEX: {}{}", hex::encode(p), dots);
@@ -138,6 +158,13 @@ macro_rules! fnum {
     };
 }
 
+macro_rules! ok {
+    () => {
+        println!("{}", "OK".green());
+    };
+}
+
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() {
     let opts = Opts::parse();
@@ -161,7 +188,21 @@ async fn main() {
         .init();
     info!("Connecting to {}, using service name {}", opts.path, name);
     let config = Config::new(&opts.path, &name);
-    let mut client = Client::connect(&config).await.unwrap();
+    let mut client = Client::connect(&config)
+        .await
+        .expect("Unable to connect to elbus");
+    macro_rules! get_payload {
+        ($p: expr) => {
+            if let Some(p) = $p {
+                p.as_bytes().to_vec()
+            } else {
+                let mut stdin = tokio::io::stdin();
+                let mut buf: Vec<u8> = Vec::new();
+                stdin.read_to_end(&mut buf).await.unwrap();
+                buf
+            }
+        };
+    }
     match opts.command {
         Command::Broker(op) => match op {
             BrokerCommand::Clients => {
@@ -210,19 +251,22 @@ async fn main() {
         },
         Command::Listen(cmd) => {
             let rx = client.take_event_channel().unwrap();
-            for topic in cmd.subscribe {
-                info!("subscribing to the topic {}", topic.yellow());
-                client
-                    .subscribe(&topic, QoS::Processed)
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .await
-                    .unwrap()
-                    .unwrap();
-            }
+            cmd.topics
+                .iter()
+                .for_each(|t| info!("subscribing to the topic {}", t.yellow()));
+            client
+                .subscribe_bulk(
+                    cmd.topics.iter().map(String::as_str).collect(),
+                    QoS::Processed,
+                )
+                .await
+                .unwrap()
+                .unwrap()
+                .await
+                .unwrap()
+                .unwrap();
             sep();
-            println!("Listening to messages for {}...", name.cyan().bold());
+            println!("Listening to messages for {} ...", name.cyan().bold());
             while let Ok(frame) = rx.recv().await {
                 info!("Incoming frame {} byte(s)", fnum!(frame.payload().len()));
                 println!(
@@ -236,6 +280,28 @@ async fn main() {
                 print_payload(frame.payload());
                 sep();
             }
+        }
+        Command::r#Send(cmd) => {
+            let payload = get_payload!(cmd.payload);
+            let fut = if cmd.target.contains(&['*', '?'][..]) {
+                client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
+            } else {
+                client.send(&cmd.target, payload.into(), QoS::Processed)
+            };
+            fut.await.unwrap().unwrap().await.unwrap().unwrap();
+            ok!();
+        }
+        Command::Publish(cmd) => {
+            let payload = get_payload!(cmd.payload);
+            client
+                .publish(&cmd.topic, payload.into(), QoS::Processed)
+                .await
+                .unwrap()
+                .unwrap()
+                .await
+                .unwrap()
+                .unwrap();
+            ok!();
         }
     }
 }
