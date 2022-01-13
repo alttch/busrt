@@ -35,6 +35,12 @@ default internal functions.
 Embedded broker
 ===============
 
+.. note::
+
+    If compiling for "musl" target, it is strongly recommended to replace the
+    default MUSL allocator with 3rd party, e.g. with `jemallocator
+    <https://crates.io/crates/jemallocator>`_ to keep the broker fast.
+
 Example of a broker with inter-thread communications and external clients:
 
 .. literalinclude:: ../examples/inter_thread.rs
