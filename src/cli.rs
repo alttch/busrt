@@ -96,7 +96,7 @@ struct RpcListenCommand {
 struct BenchmarkCommand {
     #[clap(short = 'w', long = "workers", default_value = "1")]
     workers: u32,
-    #[clap(short = 'w', long = "payload-size", default_value = "100")]
+    #[clap(long = "payload-size", default_value = "100")]
     payload_size: usize,
     #[clap(short = 'i', long = "iters", default_value = "1000000")]
     iters: u32,
