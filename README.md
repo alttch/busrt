@@ -98,6 +98,7 @@ default internal functions.
 ## Some numbers
 
 CPU: AMD Ryzen 9 5950X
+
 Broker: 8 workers, clients: 10, payload size: 500 bytes, local IPC (single unix
 socket), totals:
 
