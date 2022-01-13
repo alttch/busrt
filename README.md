@@ -95,6 +95,22 @@ cargo build --features server,broker-api
 The "broker-api" feature is optional. When enabled, it allows to call broker
 default internal functions.
 
+## Some numbers
+
+CPU: AMD Ryzen 9 5950X
+Broker: 8 workers, clients: 10, payload size: 500 bytes, local IPC (single unix
+socket), totals:
+
+| stage                    | iters/s     |
+|--------------------------|-------------|
+| rpc.call                 | 358\_513    |
+| rpc.call+handle          | 187\_043    |
+| rpc.call0                | 446\_663    |
+| send+recv.qos.no         | 478\_062    |
+| send+recv.qos.processed  | 375\_817    |
+| send.qos.no              | 3\_019\_431 |
+| send.qos.processed       | 446\_416    |
+
 ## About the authors
 
 [Bohemia Automation](https://www.bohemia-automation.com) /
