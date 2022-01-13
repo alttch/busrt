@@ -205,19 +205,17 @@ async fn print_payload(payload: &[u8], silent: bool) {
                 println!("{:?}: {}", k, v.to_debug_string().blue());
             }
         }
+    } else if silent {
+        let mut stdin = tokio::io::stdout();
+        stdin.write_all(payload).await.unwrap();
     } else {
-        if silent {
-            let mut stdin = tokio::io::stdout();
-            stdin.write_all(payload).await.unwrap();
+        let (p, dots) = if payload.len() > 256 {
+            (&payload[..256], "...")
         } else {
-            let (p, dots) = if payload.len() > 256 {
-                (&payload[..256], "...")
-            } else {
-                #[allow(clippy::redundant_slicing)]
-                (&payload[..], "")
-            };
-            println!("HEX: {}{}", hex::encode(p), dots);
-        }
+            #[allow(clippy::redundant_slicing)]
+            (&payload[..], "")
+        };
+        println!("HEX: {}{}", hex::encode(p), dots);
     }
 }
 
@@ -359,7 +357,7 @@ async fn benchmark_client(
     for w in 0..workers {
         let cname = format!("{}-{}", client_name, w + 1);
         let cname_null = format!("{}-{}-null", client_name, w + 1);
-        let mut client = create_client(&opts, &cname).await;
+        let mut client = create_client(opts, &cname).await;
         let rx = client.take_event_channel().unwrap();
         clients.push(Arc::new(Mutex::new(client)));
         ecs.push(Arc::new(Mutex::new(rx)));
@@ -391,7 +389,7 @@ async fn benchmark_client(
             }));
         };
     }
-    for q in vec![(QoS::No, "no"), (QoS::Processed, "processed")] {
+    for q in &[(QoS::No, "no"), (QoS::Processed, "processed")] {
         let qos = q.0;
         clear!();
         staged_benchmark_start!(&format!("send.qos.{}", q.1));
@@ -403,7 +401,7 @@ async fn benchmark_client(
         }
         bm_finish!(iters, futs);
     }
-    for q in vec![(QoS::No, "no"), (QoS::Processed, "processed")] {
+    for q in &[(QoS::No, "no"), (QoS::Processed, "processed")] {
         let qos = q.0;
         clear!();
         staged_benchmark_start!(&format!("send+recv.qos.{}", q.1));
@@ -417,7 +415,7 @@ async fn benchmark_client(
                 let rx = crx.lock().await;
                 let mut cnt = 0;
                 while cnt < iters_worker {
-                    let _ = rx.recv().await;
+                    let _r = rx.recv().await;
                     cnt += 1;
                 }
             }));
@@ -456,7 +454,7 @@ async fn benchmark_rpc(
     for w in 0..workers {
         let cname = format!("{}-{}", client_name, w + 1);
         let cname_null = format!("{}-{}-null", client_name, w + 1);
-        let client = create_client(&opts, &cname).await;
+        let client = create_client(opts, &cname).await;
         let rpc = RpcClient::new(client, BenchmarkHandlers {});
         rpcs.push(Arc::new(Mutex::new(rpc)));
         cnns.push(cname_null);
@@ -483,14 +481,14 @@ async fn benchmark_rpc(
             }));
         };
     }
-    staged_benchmark_start!(&format!("rpc.call"));
+    staged_benchmark_start!("rpc.call");
     for w in 0..workers {
         let rpc = rpcs[w as usize].clone();
         let payload = data.clone();
         spawn_caller!(rpc, ".broker", "benchmark.test", payload, true);
     }
     bm_finish!(iters, futs);
-    staged_benchmark_start!(&format!("rpc.call+handle"));
+    staged_benchmark_start!("rpc.call+handle");
     for w in 0..workers {
         let rpc = rpcs[w as usize].clone();
         let target = rpc.lock().await.client().lock().await.get_name().to_owned();
@@ -498,7 +496,7 @@ async fn benchmark_rpc(
         spawn_caller!(rpc, target, "benchmark.selftest", payload, true);
     }
     bm_finish!(iters, futs);
-    staged_benchmark_start!(&format!("rpc.call0"));
+    staged_benchmark_start!("rpc.call0");
     for w in 0..workers {
         let rpc = rpcs[w as usize].clone();
         let target = cnns[w as usize].clone();
@@ -548,7 +546,7 @@ async fn main() {
                 if $c.params.len() == 1 && $c.params[0] == "_" {
                     Vec::new()
                 } else {
-                    let s = $c.params.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
+                    let s = $c.params.iter().map(String::as_str).collect::<Vec<&str>>();
                     rmp_serde::to_vec_named(&elbus::common::str_to_params_map(&s).unwrap()).unwrap()
                 }
             };

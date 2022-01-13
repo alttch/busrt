@@ -224,7 +224,7 @@ impl Client {
             (Writer::Tcp(writer), reader_fut, rx)
         };
         Ok(Self {
-            name: config.name.to_owned(),
+            name: config.name.clone(),
             writer,
             reader_fut,
             frame_id: 0,
