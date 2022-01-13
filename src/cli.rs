@@ -62,6 +62,7 @@ struct PublishCommand {
 #[derive(Clap)]
 enum RpcCommand {
     Listen(RpcListenCommand),
+    Notify(SendCommand),
 }
 
 #[derive(Clap)]
@@ -349,6 +350,18 @@ async fn main() {
                 while rpc.is_connected() {
                     sleep(sleep_step).await;
                 }
+            }
+            RpcCommand::Notify(cmd) => {
+                let mut rpc = RpcClient::new(client, DummyHandlers {});
+                let payload = get_payload(&cmd.payload).await;
+                rpc.notify(&cmd.target, payload.into(), QoS::Processed)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .await
+                    .unwrap()
+                    .unwrap();
+                ok!();
             }
         },
     }
