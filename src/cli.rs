@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use clap::{ArgEnum, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use colored::Colorize;
 use elbus::client::AsyncClient;
 use elbus::common::ClientList;
@@ -34,7 +34,7 @@ where
     }
 }
 
-#[derive(ArgEnum, Clone)]
+#[derive(Subcommand, Clone)]
 enum BrokerCommand {
     //#[clap(help = "List registered clients")]
     Clients,
@@ -62,7 +62,7 @@ struct PublishCommand {
     payload: Option<String>,
 }
 
-#[derive(ArgEnum, Clone)]
+#[derive(Subcommand, Clone)]
 enum RpcCommand {
     Listen(RpcListenCommand),
     Notify(SendCommand),
@@ -76,11 +76,13 @@ struct RpcListenCommand {
 
 #[derive(Clone, Subcommand)]
 enum Command {
+    #[clap(subcommand)]
     Broker(BrokerCommand),
-    //Listen(ListenCommand),
-    //r#Send(SendCommand),
-    //Publish(PublishCommand),
-    //Rpc(RpcCommand),
+    Listen(ListenCommand),
+    r#Send(SendCommand),
+    Publish(PublishCommand),
+    #[clap(subcommand)]
+    Rpc(RpcCommand),
 }
 
 #[derive(Parser)]
@@ -316,60 +318,60 @@ async fn main() {
                 table.printstd();
             }
         },
-        //Command::Listen(cmd) => {
-        //subscribe_topics(&mut client, &cmd.topics).await.unwrap();
-        //sep();
-        //let rx = client.take_event_channel().unwrap();
-        //println!("Listening to messages for {} ...", name.cyan().bold());
-        //while let Ok(frame) = rx.recv().await {
-        //print_frame(&frame);
-        //}
-        //}
-        //Command::r#Send(cmd) => {
-        //let payload = get_payload(&cmd.payload).await;
-        //let fut = if cmd.target.contains(&['*', '?'][..]) {
-        //client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
-        //} else {
-        //client.send(&cmd.target, payload.into(), QoS::Processed)
-        //};
-        //fut.await.unwrap().unwrap().await.unwrap().unwrap();
-        //ok!();
-        //}
-        //Command::Publish(cmd) => {
-        //let payload = get_payload(&cmd.payload).await;
-        //client
-        //.publish(&cmd.topic, payload.into(), QoS::Processed)
-        //.await
-        //.unwrap()
-        //.unwrap()
-        //.await
-        //.unwrap()
-        //.unwrap();
-        //ok!();
-        //}
-        //Command::Rpc(r) => match r {
-        //RpcCommand::Listen(cmd) => {
-        //subscribe_topics(&mut client, &cmd.topics).await.unwrap();
-        //let rpc = RpcClient::new(client, Handlers {});
-        //sep();
-        //println!("Listening to RPC messages for {} ...", name.cyan().bold());
-        //let sleep_step = Duration::from_millis(100);
-        //while rpc.is_connected() {
-        //sleep(sleep_step).await;
-        //}
-        //}
-        //RpcCommand::Notify(cmd) => {
-        //let mut rpc = RpcClient::new(client, DummyHandlers {});
-        //let payload = get_payload(&cmd.payload).await;
-        //rpc.notify(&cmd.target, payload.into(), QoS::Processed)
-        //.await
-        //.unwrap()
-        //.unwrap()
-        //.await
-        //.unwrap()
-        //.unwrap();
-        //ok!();
-        //}
-        //},
+        Command::Listen(cmd) => {
+            subscribe_topics(&mut client, &cmd.topics).await.unwrap();
+            sep();
+            let rx = client.take_event_channel().unwrap();
+            println!("Listening to messages for {} ...", name.cyan().bold());
+            while let Ok(frame) = rx.recv().await {
+                print_frame(&frame);
+            }
+        }
+        Command::r#Send(cmd) => {
+            let payload = get_payload(&cmd.payload).await;
+            let fut = if cmd.target.contains(&['*', '?'][..]) {
+                client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
+            } else {
+                client.send(&cmd.target, payload.into(), QoS::Processed)
+            };
+            fut.await.unwrap().unwrap().await.unwrap().unwrap();
+            ok!();
+        }
+        Command::Publish(cmd) => {
+            let payload = get_payload(&cmd.payload).await;
+            client
+                .publish(&cmd.topic, payload.into(), QoS::Processed)
+                .await
+                .unwrap()
+                .unwrap()
+                .await
+                .unwrap()
+                .unwrap();
+            ok!();
+        }
+        Command::Rpc(r) => match r {
+            RpcCommand::Listen(cmd) => {
+                subscribe_topics(&mut client, &cmd.topics).await.unwrap();
+                let rpc = RpcClient::new(client, Handlers {});
+                sep();
+                println!("Listening to RPC messages for {} ...", name.cyan().bold());
+                let sleep_step = Duration::from_millis(100);
+                while rpc.is_connected() {
+                    sleep(sleep_step).await;
+                }
+            }
+            RpcCommand::Notify(cmd) => {
+                let mut rpc = RpcClient::new(client, DummyHandlers {});
+                let payload = get_payload(&cmd.payload).await;
+                rpc.notify(&cmd.target, payload.into(), QoS::Processed)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .await
+                    .unwrap()
+                    .unwrap();
+                ok!();
+            }
+        },
     }
 }
