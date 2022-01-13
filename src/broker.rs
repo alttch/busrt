@@ -298,6 +298,7 @@ impl ElbusClientType {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct ElbusClient {
     name: String,
@@ -709,31 +710,8 @@ impl Broker {
                     .await?;
                 Ok(())
             } else if let Some(method) = payload.strip_prefix(':') {
-                use serde_json::value::Value;
-                let mut params: HashMap<&str, Value> = HashMap::new();
-                for pair in sp {
-                    if !pair.is_empty() {
-                        let mut psp = pair.split('=');
-                        let var = psp
-                            .next()
-                            .ok_or_else(|| Error::data("var name not specified"))?;
-                        let v = psp
-                            .next()
-                            .ok_or_else(|| Error::data("var value not specified"))?;
-                        let value = if v == "false" {
-                            Value::from(false)
-                        } else if v == "true" {
-                            Value::from(true)
-                        } else if let Ok(i) = v.parse::<i64>() {
-                            Value::from(i)
-                        } else if let Ok(f) = v.parse::<f64>() {
-                            Value::from(f)
-                        } else {
-                            Value::from(v)
-                        };
-                        params.insert(var, value);
-                    }
-                }
+                let s = sp.collect::<Vec<&str>>();
+                let params = crate::common::str_to_params_map(&s)?;
                 rpc.lock()
                     .await
                     .call0(

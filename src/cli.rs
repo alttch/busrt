@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use atty::Stream;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use elbus::client::AsyncClient;
@@ -47,11 +48,21 @@ struct ListenCommand {
 }
 
 #[derive(Parser, Clone)]
-struct SendCommand {
+struct TargetPayload {
     #[clap()]
     target: String,
     #[clap(help = "payload string or empty for stdin")]
     payload: Option<String>,
+}
+
+#[derive(Parser, Clone)]
+struct RpcCall {
+    #[clap()]
+    target: String,
+    #[clap()]
+    method: String,
+    #[clap(help = "payload string key=value, empty for stdin payload or '_' for no params")]
+    params: Vec<String>,
 }
 
 #[derive(Parser, Clone)]
@@ -65,7 +76,9 @@ struct PublishCommand {
 #[derive(Subcommand, Clone)]
 enum RpcCommand {
     Listen(RpcListenCommand),
-    Notify(SendCommand),
+    Notify(TargetPayload),
+    Call0(RpcCall),
+    Call(RpcCall),
 }
 
 #[derive(Parser, Clone)]
@@ -79,7 +92,7 @@ enum Command {
     #[clap(subcommand)]
     Broker(BrokerCommand),
     Listen(ListenCommand),
-    r#Send(SendCommand),
+    r#Send(TargetPayload),
     Publish(PublishCommand),
     #[clap(subcommand)]
     Rpc(RpcCommand),
@@ -94,6 +107,8 @@ struct Opts {
     name: Option<String>,
     #[clap(short = 'v', long = "--verbose")]
     verbose: bool,
+    #[clap(short = 's', long = "--silent", help = "suppress logging")]
+    silent: bool,
     #[clap(subcommand)]
     command: Command,
 }
@@ -255,6 +270,9 @@ impl RpcHandlers for Handlers {
 async fn read_stdin() -> Vec<u8> {
     let mut stdin = tokio::io::stdin();
     let mut buf: Vec<u8> = Vec::new();
+    if atty::is(Stream::Stdin) {
+        println!("Reading stdin, Ctrl-D to finish...");
+    }
     stdin.read_to_end(&mut buf).await.unwrap();
     buf
 }
@@ -281,19 +299,37 @@ async fn main() {
             std::process::id()
         )
     });
-    env_logger::Builder::new()
-        .target(env_logger::Target::Stdout)
-        .filter_level(if opts.verbose {
-            log::LevelFilter::Trace
-        } else {
-            log::LevelFilter::Info
-        })
-        .init();
+    if !opts.silent {
+        env_logger::Builder::new()
+            .target(env_logger::Target::Stdout)
+            .filter_level(if opts.verbose {
+                log::LevelFilter::Trace
+            } else {
+                log::LevelFilter::Info
+            })
+            .init();
+    }
     info!("Connecting to {}, using service name {}", opts.path, name);
     let config = Config::new(&opts.path, &name);
     let mut client = Client::connect(&config)
         .await
         .expect("Unable to connect to the elbus broker");
+    macro_rules! prepare_rpc_call {
+        ($c: expr, $client: expr) => {{
+            let rpc = RpcClient::new($client, DummyHandlers {});
+            let payload = if $c.params.is_empty() {
+                read_stdin().await
+            } else {
+                if $c.params.len() == 1 && $c.params[0] == "_" {
+                    Vec::new()
+                } else {
+                    let s = $c.params.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
+                    rmp_serde::to_vec_named(&elbus::common::str_to_params_map(&s).unwrap()).unwrap()
+                }
+            };
+            (rpc, payload)
+        }};
+    }
     match opts.command {
         Command::Broker(op) => match op {
             BrokerCommand::Clients => {
@@ -371,6 +407,25 @@ async fn main() {
                     .unwrap()
                     .unwrap();
                 ok!();
+            }
+            RpcCommand::Call0(cmd) => {
+                let (rpc, payload) = prepare_rpc_call!(cmd, client);
+                rpc.call0(&cmd.target, &cmd.method, payload.into())
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .await
+                    .unwrap()
+                    .unwrap();
+                ok!();
+            }
+            RpcCommand::Call(cmd) => {
+                let (mut rpc, payload) = prepare_rpc_call!(cmd, client);
+                let result = rpc
+                    .call(&cmd.target, &cmd.method, payload.into())
+                    .await
+                    .unwrap();
+                print_payload(result.payload());
             }
         },
     }

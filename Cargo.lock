@@ -278,6 +278,7 @@ version = "0.1.3"
 dependencies = [
  "async-channel",
  "async-trait",
+ "atty",
  "bma-benchmark",
  "chrono",
  "clap",

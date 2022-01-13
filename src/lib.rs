@@ -1,4 +1,4 @@
-// TODO CLI tool: send rpc, benchmark
+// TODO CLI tool: benchmark
 // TODO broker internal functions with params
 // TODO broker internal broadcast (topic) events
 // TODO broker info events
