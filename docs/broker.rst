@@ -9,6 +9,16 @@ the broker using inter-process communications (UNIX sockets or TCP).
 
 elbus broker is currently implemented in Rust only.
 
+Broker API
+==========
+
+When **broker-api** feature is enabled, the following default RPC methods are
+available at **.broker** automatically:
+
+* **list_clients()** - list all connected clients
+
+The payload exchange format (call params / replies) is MessagePack.
+
 Stand-alone broker server
 =========================
 
