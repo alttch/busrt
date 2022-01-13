@@ -4,9 +4,9 @@ use elbus::client::AsyncClient;
 use elbus::ipc::{Client, Config};
 use elbus::rpc::{DummyHandlers, Rpc, RpcClient};
 use elbus::{empty_payload, Error, QoS};
+use elbus::common::ClientList;
 use log::info;
 use num_format::{Locale, ToFormattedString};
-use serde::Deserialize;
 use serde_value::Value;
 use std::collections::BTreeMap;
 use tokio::io::AsyncReadExt;
@@ -206,34 +206,12 @@ async fn main() {
     match opts.command {
         Command::Broker(op) => match op {
             BrokerCommand::Clients => {
-                #[derive(Deserialize, Eq, PartialEq)]
-                struct ClientInfo<'a> {
-                    name: &'a str,
-                    tp: &'a str,
-                    source: Option<&'a str>,
-                    port: Option<&'a str>,
-                }
-                impl<'a> Ord for ClientInfo<'a> {
-                    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                        self.name.cmp(other.name)
-                    }
-                }
-                impl<'a> PartialOrd for ClientInfo<'a> {
-                    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                        Some(self.cmp(other))
-                    }
-                }
-                #[derive(Deserialize)]
-                struct Clients<'a> {
-                    #[serde(borrow)]
-                    clients: Vec<ClientInfo<'a>>,
-                }
                 let mut rpc = RpcClient::new(client, DummyHandlers {});
                 let result = rpc
                     .call(".broker", "list_clients", empty_payload!())
                     .await
                     .unwrap();
-                let mut clients: Clients = rmp_serde::from_read_ref(result.payload()).unwrap();
+                let mut clients: ClientList = rmp_serde::from_read_ref(result.payload()).unwrap();
                 clients.clients.sort();
                 let mut table = ctable(vec!["name", "type", "source", "port"]);
                 for c in clients.clients {

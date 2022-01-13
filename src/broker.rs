@@ -26,6 +26,8 @@ use crate::OP_ACK;
 
 use crate::borrow::Cow;
 use crate::client::AsyncClient;
+#[cfg(feature = "broker-api")]
+use crate::common::{ClientInfo, ClientList};
 use crate::{EventChannel, OpConfirm};
 use crate::{Frame, FrameData, FrameKind, FrameOp, QoS};
 
@@ -286,28 +288,13 @@ enum ElbusClientType {
 }
 
 impl ElbusClientType {
+    #[allow(dead_code)]
     fn as_str(&self) -> &str {
         match self {
             ElbusClientType::Internal => "internal",
             ElbusClientType::LocalIpc => "local_ipc",
             ElbusClientType::Tcp => "tcp",
         }
-    }
-}
-
-impl fmt::Display for ElbusClientType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
-#[cfg(feature = "broker-api")]
-impl serde::Serialize for ElbusClientType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(self.as_str())
     }
 }
 
@@ -417,7 +404,6 @@ impl BrokerDb {
         self.clients.write().unwrap().remove(&client.name);
     }
 }
-
 pub struct Broker {
     db: Arc<BrokerDb>,
     services: Vec<JoinHandle<()>>,
@@ -437,40 +423,19 @@ impl RpcHandlers for BrokerRpcHandlers {
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
         match event.parse_method()? {
             "list_clients" => {
-                #[derive(serde::Serialize, Eq, PartialEq)]
-                struct ClientInfo<'a> {
-                    name: &'a str,
-                    tp: ElbusClientType,
-                    source: Option<&'a str>,
-                    port: Option<&'a str>,
-                }
-                impl<'a> Ord for ClientInfo<'a> {
-                    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                        self.name.cmp(other.name)
-                    }
-                }
-                impl<'a> PartialOrd for ClientInfo<'a> {
-                    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                        Some(self.cmp(other))
-                    }
-                }
-                #[derive(serde::Serialize)]
-                struct Clients<'a> {
-                    clients: Vec<ClientInfo<'a>>,
-                }
                 let db = self.db.clients.read().unwrap();
                 let mut clients: Vec<ClientInfo> = db
                     .values()
                     .into_iter()
                     .map(|v| ClientInfo {
                         name: &v.name,
-                        tp: v.tp,
+                        tp: v.tp.as_str(),
                         source: v.source.as_deref(),
                         port: v.port.as_deref(),
                     })
                     .collect();
                 clients.sort();
-                Ok(Some(rmp_serde::to_vec_named(&Clients { clients })?))
+                Ok(Some(rmp_serde::to_vec_named(&ClientList { clients })?))
             }
             _ => Err(RpcError::method()),
         }

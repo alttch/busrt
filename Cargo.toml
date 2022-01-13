@@ -47,7 +47,7 @@ serde-value = { version = "0.7.0", optional = true }
 server = ["log", "syslog", "chrono", "colored", "clap", "clap_derive",
           "lazy_static", "jemallocator", "fork", "broker"]
 broker = ["log", "submap", "async-trait", "unix-named-pipe"]
-broker-api = ["serde", "broker", "rpc"]
+broker-api = ["broker", "rpc", "serialization"]
 ipc = ["log", "async-trait"]
 rpc = ["log", "rmp-serde", "async-trait", "serde_json"]
 serialization = ["serde"]

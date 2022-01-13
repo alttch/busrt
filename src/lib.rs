@@ -389,6 +389,9 @@ impl FrameData {
     }
 }
 
+pub mod borrow;
+pub mod common;
+
 #[cfg(feature = "broker")]
 pub mod broker;
 #[cfg(feature = "ipc")]
@@ -396,6 +399,5 @@ pub mod ipc;
 #[cfg(any(feature = "rpc", feature = "broker-api"))]
 pub mod rpc;
 
-pub mod borrow;
 #[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]
 pub mod client;
