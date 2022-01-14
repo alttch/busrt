@@ -1,4 +1,3 @@
-// TODO bus rpc: stats
 use std::fmt;
 use std::sync::Arc;
 
