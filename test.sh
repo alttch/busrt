@@ -6,7 +6,7 @@ shift
 
 case ${CMD} in
   server)
-    cargo run --release --features server,broker-api --bin elbusd -- -B /tmp/elbus.sock \
+    cargo run --release --features server,rpc --bin elbusd -- -B /tmp/elbus.sock \
       -B 0.0.0.0:9924 -B fifo:/tmp/elbus.fifo $*
     ;;
   #benchmark)

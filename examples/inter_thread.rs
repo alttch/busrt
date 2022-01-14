@@ -10,7 +10,9 @@ const SLEEP_STEP: Duration = Duration::from_secs(1);
 #[tokio::main]
 async fn main() {
     // create a new broker instance
-    let mut broker = Broker::create().await;
+    let mut broker = Broker::new();
+    // init the default broker RPC API, optional
+    broker.init_default_core_rpc().await.unwrap();
     // spawn unix server for external clients
     broker
         .spawn_unix_server("/tmp/elbus.sock", 8192, Duration::from_secs(5))

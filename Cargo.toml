@@ -11,10 +11,10 @@ keywords = ["bus", "ipc", "pubsub"]
 autoexamples = false
 
 [package.metadata.docs.rs]
-features = ["broker-api", "ipc", "rpc"]
+features = ["broker", "ipc", "rpc"]
 
 [package.metadata.playground]
-features = ["broker-api", "ipc", "rpc"]
+features = ["broker", "ipc", "rpc"]
 
 [dependencies]
 tokio = { version = "1.15.0", features = ["full"] }
@@ -47,7 +47,6 @@ nix = "0.22.1"
 server = ["log", "syslog", "chrono", "colored", "clap",
           "lazy_static", "jemallocator", "fork", "broker"]
 broker = ["log", "submap", "async-trait", "unix-named-pipe"]
-broker-api = ["broker", "rpc"]
 ipc = ["log", "async-trait"]
 rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value"]
 cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark",
@@ -70,7 +69,7 @@ required-features = ["cli"]
 
 [[example]]
 name = "inter_thread"
-required-features = ["broker"]
+required-features = ["broker", "rpc"]
 
 [[example]]
 name = "broker_custom_rpc"

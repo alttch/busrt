@@ -30,16 +30,14 @@ use crate::OP_ACK;
 
 use crate::borrow::Cow;
 use crate::client::AsyncClient;
-#[cfg(feature = "broker-api")]
+#[cfg(feature = "rpc")]
 use crate::common::{ClientInfo, ClientList};
 use crate::{EventChannel, OpConfirm};
 use crate::{Frame, FrameData, FrameKind, FrameOp, QoS};
 
 #[cfg(feature = "rpc")]
-use crate::rpc::{Rpc, RpcClient};
-#[cfg(feature = "broker-api")]
-use crate::rpc::{RpcError, RpcEvent, RpcHandlers, RpcResult};
-#[cfg(feature = "broker-api")]
+use crate::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
+#[cfg(feature = "rpc")]
 use serde_value::Value;
 
 use async_trait::async_trait;
@@ -528,12 +526,12 @@ pub struct Broker {
     queue_size: usize,
 }
 
-#[cfg(feature = "broker-api")]
+#[cfg(feature = "rpc")]
 struct BrokerRpcHandlers {
     db: Arc<BrokerDb>,
 }
 
-#[cfg(feature = "broker-api")]
+#[cfg(feature = "rpc")]
 #[async_trait]
 impl RpcHandlers for BrokerRpcHandlers {
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
@@ -660,30 +658,30 @@ where
     source_port: Option<String>,
 }
 
+impl Default for Broker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Broker {
-    pub async fn create() -> Self {
+    pub fn new() -> Self {
         let broker_db: Arc<BrokerDb> = <_>::default();
-        let mut broker = Self {
-            #[cfg(feature = "broker-api")]
-            db: broker_db.clone(),
-            #[cfg(not(feature = "broker-api"))]
+        Self {
             db: broker_db,
             services: <_>::default(),
-            queue_size: 0,
-        };
-        // avoid warning if rpc feature is not set
-        broker.queue_size = DEFAULT_QUEUE_SIZE;
-        #[cfg(feature = "broker-api")]
-        {
-            let client = broker
-                .register_client(BROKER_NAME)
-                .await
-                .expect("can not register broker RPC");
-            let handlers = BrokerRpcHandlers { db: broker_db };
-            let rpc_client = RpcClient::new(client, handlers);
-            broker.db.rpc_client.lock().await.replace(rpc_client);
+            queue_size: DEFAULT_QUEUE_SIZE,
         }
-        broker
+    }
+    #[cfg(feature = "rpc")]
+    pub async fn init_default_core_rpc(&self) -> Result<(), Error> {
+        let client = self.register_client(BROKER_NAME).await?;
+        let handlers = BrokerRpcHandlers {
+            db: self.db.clone(),
+        };
+        let rpc_client = RpcClient::new(client, handlers);
+        self.set_core_rpc_client(rpc_client).await;
+        Ok(())
     }
     pub fn set_queue_size(&mut self, queue_size: usize) {
         self.queue_size = queue_size;
@@ -766,7 +764,7 @@ impl Broker {
     /// echo TARGET .MESSAGE # RPC notification
     /// echo TARGET :method param=value param=value # RPC call, the payload will be sent as msgpack
     ///
-    /// Requires either broker-api feature or rpc feature + broker core rpc client to be set
+    /// Requires rpc feature + broker core rpc client to be set
     #[cfg(feature = "rpc")]
     pub async fn spawn_fifo(&mut self, path: &str, buf_size: usize) -> Result<(), Error> {
         let rpc_client = self.db.rpc_client.clone();

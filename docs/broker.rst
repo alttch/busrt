@@ -12,8 +12,8 @@ elbus broker is currently implemented in Rust only.
 Broker API
 ==========
 
-When **broker-api** feature is enabled, the following default RPC methods are
-available at **.broker** automatically:
+When **rpc** feature is enabled, the following default RPC methods are
+available at **.broker** after *broker.init_default_core_rpc* method is called:
 
 * **client.list()** - list all connected clients
 * **benchmark.test(payload)** - test method, returns the payload as-is
@@ -27,10 +27,9 @@ To build a stand-alone broker server, use the command:
 
 .. code:: shell
     
-    cargo build --features server,broker-api
+    cargo build --features server,rpc
 
-The *broker-api* feature is optional. When enabled, it allows to call broker
-default internal functions.
+The *rpc* feature is optional.
 
 Embedded broker
 ===============

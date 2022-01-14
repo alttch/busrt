@@ -89,11 +89,12 @@ See [examples](https://github.com/alttch/elbus/tree/main/examples) folder.
 ## Build a stand-alone server
 
 ```
-cargo build --features server,broker-api
+cargo build --features server,rpc
 ```
 
-The "broker-api" feature is optional. When enabled, it allows to call broker
-default internal functions.
+The "rpc" feature is optional. When enabled for the server, it allows to
+initialize the default broker RPC API, spawn fifo servers, send broker
+announcements etc.
 
 ## Some numbers
 

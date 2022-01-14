@@ -395,7 +395,7 @@ pub mod common;
 pub mod broker;
 #[cfg(feature = "ipc")]
 pub mod ipc;
-#[cfg(any(feature = "rpc", feature = "broker-api"))]
+#[cfg(feature = "rpc")]
 pub mod rpc;
 
 #[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]

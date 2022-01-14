@@ -34,7 +34,6 @@ Crate features
 * **ipc** - enable IPC client
 * **rpc** - enable optional RPC layer
 * **broker** - enable broker
-* **broker-api** - enable the default broker API
 * **server** - build stand-alone broker server
 * **cli** - build CLI tool
 

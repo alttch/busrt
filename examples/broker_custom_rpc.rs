@@ -1,5 +1,4 @@
 /// Demo of custom broker internal RPC
-/// Do not build with "broker-api" feature
 use async_trait::async_trait;
 use elbus::broker::{Broker, BROKER_NAME};
 use elbus::client::AsyncClient;
@@ -53,7 +52,7 @@ impl RpcHandlers for MyHandlers {
 #[tokio::main]
 async fn main() {
     // create a new broker instance
-    let mut broker = Broker::create().await;
+    let mut broker = Broker::new();
     // spawn unix server for external clients
     broker
         .spawn_unix_server("/tmp/elbus.sock", 8192, Duration::from_secs(5))

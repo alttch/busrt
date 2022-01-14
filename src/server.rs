@@ -206,14 +206,16 @@ fn main() {
         }
         handle_term_signal!(SignalKind::interrupt(), false);
         handle_term_signal!(SignalKind::terminate(), true);
-        let mut broker = Broker::create().await;
+        let mut broker = Broker::new();
+        #[cfg(feature = "rpc")]
+        broker.init_default_core_rpc().await.unwrap();
         broker.set_queue_size(opts.queue_size);
         let mut sock_files = SOCK_FILES.lock().await;
         for path in opts.path {
             info!("binding at {}", path);
             #[allow(clippy::case_sensitive_file_extension_comparisons)]
             if let Some(_fifo) = path.strip_prefix("fifo:") {
-                #[cfg(feature = "broker-api")]
+                #[cfg(feature = "rpc")]
                 {
                     broker
                         .spawn_fifo(_fifo, opts.buf_size)
