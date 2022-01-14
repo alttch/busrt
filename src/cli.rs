@@ -3,7 +3,7 @@ use atty::Stream;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use elbus::client::AsyncClient;
-use elbus::common::ClientList;
+use elbus::common::{BrokerStats, ClientList};
 use elbus::ipc::{Client, Config};
 use elbus::rpc::{DummyHandlers, Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::{empty_payload, Error, Frame, QoS};
@@ -43,7 +43,11 @@ where
 #[derive(Subcommand, Clone)]
 enum BrokerCommand {
     #[clap(name = "client.list")]
-    Clients,
+    ClientList,
+    #[clap(name = "stats")]
+    Stats,
+    #[clap(name = "test")]
+    Test,
 }
 
 #[derive(Parser, Clone)]
@@ -557,7 +561,7 @@ async fn main() {
         Command::Broker(ref op) => {
             let client = create_client(&opts, &client_name).await;
             match op {
-                BrokerCommand::Clients => {
+                BrokerCommand::ClientList => {
                     let mut rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc
                         .call(".broker", "client.list", empty_payload!())
@@ -568,7 +572,7 @@ async fn main() {
                     clients.clients.sort();
                     let mut table = ctable(vec![
                         "name", "type", "source", "port", "r_frames", "r_bytes", "w_frames",
-                        "w_bytes",
+                        "w_bytes", "queue",
                     ]);
                     for c in clients.clients {
                         if c.name != client_name {
@@ -581,10 +585,31 @@ async fn main() {
                                 fnum!(c.r_bytes),
                                 fnum!(c.w_frames),
                                 fnum!(c.w_bytes),
+                                fnum!(c.queue),
                             ]);
                         }
                     }
                     table.printstd();
+                }
+                BrokerCommand::Stats => {
+                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let result = rpc
+                        .call(".broker", "stats", empty_payload!())
+                        .await
+                        .unwrap();
+                    let stats: BrokerStats = rmp_serde::from_read_ref(result.payload()).unwrap();
+                    let mut table = ctable(vec!["metric", "value"]);
+                    table.add_row(row!["r_frames", stats.r_frames]);
+                    table.add_row(row!["r_bytes", stats.r_bytes]);
+                    table.add_row(row!["w_frames", stats.w_frames]);
+                    table.add_row(row!["w_bytes", stats.w_bytes]);
+                    table.add_row(row!["uptime", stats.uptime]);
+                    table.printstd();
+                }
+                BrokerCommand::Test => {
+                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let result = rpc.call(".broker", "test", empty_payload!()).await.unwrap();
+                    print_payload(result.payload(), true).await;
                 }
             }
         }

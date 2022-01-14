@@ -12,6 +12,7 @@ use std::sync::atomic;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
+use std::time::Instant;
 use submap::{BroadcastMap, SubMap};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::net::{TcpListener, TcpStream, UnixListener, UnixStream};
@@ -30,6 +31,7 @@ use crate::OP_ACK;
 
 use crate::borrow::Cow;
 use crate::client::AsyncClient;
+use crate::common::BrokerStats;
 #[cfg(feature = "rpc")]
 use crate::common::{ClientInfo, ClientList};
 use crate::{EventChannel, OpConfirm};
@@ -79,11 +81,15 @@ macro_rules! send {
      $buf:expr, $payload_pos:expr, $len: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+        $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+        $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus message from {} to {}", $client, $target);
         let tx = {
             $db.clients.read().unwrap().get($target).map(|c| {
                 c.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 c.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+                $db.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                $db.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
                 c.tx.clone()
             })
         };
@@ -108,6 +114,8 @@ macro_rules! send_broadcast {
      $buf:expr, $payload_pos:expr, $len: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+        $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+        $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus broadcast message from {} to {}", $client, $target);
         #[allow(clippy::mutable_key_type)]
         let subs = { $db.broadcasts.read().unwrap().get_clients_by_mask($target) };
@@ -120,6 +128,10 @@ macro_rules! send_broadcast {
                 buf: $buf,
                 payload_pos: $payload_pos,
             });
+            $db.w_frames
+                .fetch_add(subs.len() as u64, atomic::Ordering::SeqCst);
+            $db.w_bytes
+                .fetch_add($len * subs.len() as u64, atomic::Ordering::SeqCst);
             for sub in subs {
                 sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
@@ -134,6 +146,8 @@ macro_rules! publish {
      $buf:expr, $payload_pos:expr, $len: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+        $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+        $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus topic publish from {} to {}", $client, $topic);
         #[allow(clippy::mutable_key_type)]
         let subs = { $db.subscriptions.read().unwrap().get_subscribers($topic) };
@@ -146,6 +160,10 @@ macro_rules! publish {
                 buf: $buf,
                 payload_pos: $payload_pos,
             });
+            $db.w_frames
+                .fetch_add(subs.len() as u64, atomic::Ordering::SeqCst);
+            $db.w_bytes
+                .fetch_add($len * subs.len() as u64, atomic::Ordering::SeqCst);
             for sub in subs {
                 sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
@@ -456,6 +474,11 @@ struct BrokerDb {
     subscriptions: RwLock<SubMap<BrokerClient>>,
     #[cfg(feature = "rpc")]
     rpc_client: Arc<Mutex<Option<RpcClient>>>,
+    r_frames: atomic::AtomicU64,
+    r_bytes: atomic::AtomicU64,
+    w_frames: atomic::AtomicU64,
+    w_bytes: atomic::AtomicU64,
+    startup_time: Instant,
 }
 
 impl Default for BrokerDb {
@@ -471,11 +494,25 @@ impl Default for BrokerDb {
             subscriptions: RwLock::new(SubMap::new().separator('/').match_any("+").wildcard("#")),
             #[cfg(feature = "rpc")]
             rpc_client: <_>::default(),
+            r_frames: atomic::AtomicU64::new(0),
+            r_bytes: atomic::AtomicU64::new(0),
+            w_frames: atomic::AtomicU64::new(0),
+            w_bytes: atomic::AtomicU64::new(0),
+            startup_time: Instant::now(),
         }
     }
 }
 
 impl BrokerDb {
+    fn stats(&self) -> BrokerStats {
+        BrokerStats {
+            uptime: self.startup_time.elapsed().as_secs(),
+            r_frames: self.r_frames.load(atomic::Ordering::SeqCst),
+            r_bytes: self.r_bytes.load(atomic::Ordering::SeqCst),
+            w_frames: self.w_frames.load(atomic::Ordering::SeqCst),
+            w_bytes: self.w_bytes.load(atomic::Ordering::SeqCst),
+        }
+    }
     #[cfg(feature = "rpc")]
     #[inline]
     async fn announce(&self, mut event: BrokerEvent<'_>) -> Result<(), Error> {
@@ -574,6 +611,22 @@ impl RpcHandlers for BrokerRpcHandlers {
             rmp_serde::from_read_ref(event.payload())?
         };
         match event.parse_method()? {
+            "test" => {
+                if !params.is_empty() {
+                    return Err(RpcError::params());
+                }
+                let mut payload = HashMap::new();
+                payload.insert("ok", Value::Bool(true));
+                payload.insert("version", Value::String(crate::VERSION.to_owned()));
+                payload.insert("author", Value::String(crate::AUTHOR.to_owned()));
+                Ok(Some(rmp_serde::to_vec_named(&payload)?))
+            }
+            "stats" => {
+                if !params.is_empty() {
+                    return Err(RpcError::params());
+                }
+                Ok(Some(rmp_serde::to_vec_named(&self.db.stats())?))
+            }
             "client.list" => {
                 if !params.is_empty() {
                     return Err(RpcError::params());
@@ -591,6 +644,7 @@ impl RpcHandlers for BrokerRpcHandlers {
                         r_bytes: v.r_bytes.load(atomic::Ordering::SeqCst),
                         w_frames: v.w_frames.load(atomic::Ordering::SeqCst),
                         w_bytes: v.w_bytes.load(atomic::Ordering::SeqCst),
+                        queue: v.tx.len(),
                     })
                     .collect();
                 clients.sort();
@@ -701,9 +755,12 @@ impl Default for Broker {
 }
 
 impl Broker {
-    #[inline]
     pub fn new() -> Self {
         Self::default()
+    }
+    #[inline]
+    pub fn stats(&self) -> BrokerStats {
+        self.db.stats()
     }
     #[cfg(feature = "rpc")]
     pub async fn init_default_core_rpc(&self) -> Result<(), Error> {
@@ -1079,6 +1136,9 @@ impl Broker {
                     client
                         .w_bytes
                         .fetch_add(buf.len() as u64, atomic::Ordering::SeqCst);
+                    db.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    db.w_bytes
+                        .fetch_add(buf.len() as u64, atomic::Ordering::SeqCst);
                     client
                         .tx
                         .send(Arc::new(FrameData {
@@ -1098,6 +1158,9 @@ impl Broker {
                     client
                         .r_bytes
                         .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
+                    db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    db.r_bytes
+                        .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
                     let sp = buf.split(|c| *c == 0);
                     {
                         let mut sdb = db.subscriptions.write().unwrap();
@@ -1115,6 +1178,9 @@ impl Broker {
                     client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
                     client
                         .r_bytes
+                        .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
+                    db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    db.r_bytes
                         .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
                     let sp = buf.split(|c| *c == 0);
                     {

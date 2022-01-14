@@ -8,7 +8,7 @@ use serde_value::Value;
 use std::collections::HashMap;
 
 #[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone)]
 pub struct ClientInfo<'a> {
     pub name: &'a str,
     pub tp: &'a str,
@@ -18,6 +18,7 @@ pub struct ClientInfo<'a> {
     pub r_bytes: u64,
     pub w_frames: u64,
     pub w_bytes: u64,
+    pub queue: usize,
 }
 impl<'a> Ord for ClientInfo<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -30,9 +31,20 @@ impl<'a> PartialOrd for ClientInfo<'a> {
     }
 }
 #[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
+#[derive(Clone)]
 pub struct ClientList<'a> {
     #[cfg_attr(feature = "rpc", serde(borrow))]
     pub clients: Vec<ClientInfo<'a>>,
+}
+
+#[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
+#[derive(Clone)]
+pub struct BrokerStats {
+    pub uptime: u64,
+    pub r_frames: u64,
+    pub r_bytes: u64,
+    pub w_frames: u64,
+    pub w_bytes: u64,
 }
 
 #[allow(clippy::ptr_arg)]
