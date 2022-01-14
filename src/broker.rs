@@ -660,18 +660,18 @@ where
 
 impl Default for Broker {
     fn default() -> Self {
-        Self::new()
+        Self {
+            db: <_>::default(),
+            services: <_>::default(),
+            queue_size: DEFAULT_QUEUE_SIZE,
+        }
     }
 }
 
 impl Broker {
+    #[inline]
     pub fn new() -> Self {
-        let broker_db: Arc<BrokerDb> = <_>::default();
-        Self {
-            db: broker_db,
-            services: <_>::default(),
-            queue_size: DEFAULT_QUEUE_SIZE,
-        }
+        Self::default()
     }
     #[cfg(feature = "rpc")]
     pub async fn init_default_core_rpc(&self) -> Result<(), Error> {
@@ -683,6 +683,7 @@ impl Broker {
         self.set_core_rpc_client(rpc_client).await;
         Ok(())
     }
+    #[inline]
     pub fn set_queue_size(&mut self, queue_size: usize) {
         self.queue_size = queue_size;
     }
