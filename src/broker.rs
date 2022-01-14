@@ -282,7 +282,7 @@ impl AsyncClient for Client {
 }
 
 impl Client {
-    /// When a internal client is dropped, it is automatically dropped from the broker db, but no
+    /// When an internal client is dropped, it is automatically dropped from the broker db, but no
     /// announce is sent. It is better to manually call "unregister" method before.
     #[inline]
     pub async fn unregister(&self) {
