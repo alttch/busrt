@@ -13,6 +13,10 @@ use std::sync::atomic;
 use std::time::Duration;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
+use tokio::time::sleep;
+
+#[cfg(feature = "rpc")]
+use elbus::broker::BrokerEvent;
 
 use elbus::broker::Broker;
 
@@ -21,6 +25,7 @@ static SERVER_ACTIVE: atomic::AtomicBool = atomic::AtomicBool::new(true);
 lazy_static! {
     static ref PID_FILE: Mutex<Option<String>> = Mutex::new(None);
     static ref SOCK_FILES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    static ref BROKER: Mutex<Option<Broker>> = Mutex::new(None);
 }
 
 struct SimpleLogger;
@@ -113,7 +118,15 @@ async fn terminate(allow_log: bool) {
     if allow_log {
         info!("terminating");
     }
+    #[cfg(feature = "rpc")]
+    if let Some(broker) = BROKER.lock().await.as_ref() {
+        if let Err(e) = broker.announce(BrokerEvent::shutdown()).await {
+            error!("{}", e);
+        }
+    }
     SERVER_ACTIVE.store(false, atomic::Ordering::SeqCst);
+    #[cfg(feature = "rpc")]
+    sleep(Duration::from_secs(1)).await;
 }
 
 macro_rules! handle_term_signal {
@@ -226,13 +239,14 @@ fn main() {
             }
         }
         drop(sock_files);
+        BROKER.lock().await.replace(broker);
         info!("elbus broker started");
         let sleep_step = Duration::from_millis(100);
         loop {
             if !SERVER_ACTIVE.load(atomic::Ordering::SeqCst) {
                 break;
             }
-            tokio::time::sleep(sleep_step).await;
+            sleep(sleep_step).await;
         }
     });
 }

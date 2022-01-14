@@ -1,4 +1,8 @@
+#[cfg(feature = "rpc")]
+use crate::common::now_ns;
 use log::{error, info, trace};
+#[cfg(feature = "rpc")]
+use serde::{Deserialize, Serialize};
 use std::collections::{hash_map, HashMap};
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -46,6 +50,9 @@ pub const BROKER_INFO_TOPIC: &str = ".broker/info";
 pub const BROKER_WARN_TOPIC: &str = ".broker/warn";
 pub const BROKER_NAME: &str = ".broker";
 
+#[allow(dead_code)]
+const BROKER_NOT_INIT_ERR: &str = "broker core RPC client not initialized";
+
 macro_rules! pretty_error {
     ($name: expr, $err:expr) => {
         if $err.kind() != ErrorKind::Eof {
@@ -67,6 +74,32 @@ macro_rules! make_confirm_channel {
             }
         }
     };
+}
+
+#[cfg(feature = "rpc")]
+#[inline]
+async fn announce(
+    rpc_candidate: Option<&Arc<Mutex<RpcClient>>>,
+    mut event: BrokerEvent<'_>,
+) -> Result<(), Error> {
+    if let Some(rpc_client) = rpc_candidate {
+        event.t = now_ns();
+        rpc_client
+            .lock()
+            .await
+            .client()
+            .lock()
+            .await
+            .publish(
+                event.topic,
+                rmp_serde::to_vec_named(&event).map_err(Error::data)?.into(),
+                QoS::No,
+            )
+            .await?;
+        Ok(())
+    } else {
+        Err(Error::not_supported(BROKER_NOT_INIT_ERR))
+    }
 }
 
 macro_rules! send {
@@ -357,6 +390,57 @@ impl Hash for ElbusClient {
     }
 }
 
+#[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Clone)]
+#[allow(clippy::module_name_repetitions)]
+pub struct BrokerEvent<'a> {
+    s: &'a str,
+    #[cfg_attr(feature = "rpc", serde(skip_serializing_if = "Option::is_none"))]
+    d: Option<&'a str>,
+    t: u64,
+    #[cfg_attr(feature = "rpc", serde(skip))]
+    topic: &'a str,
+}
+
+impl<'a> BrokerEvent<'a> {
+    pub fn new(s: &'a str, d: Option<&'a str>, topic: &'a str) -> Self {
+        Self { s, d, t: 0, topic }
+    }
+    pub fn shutdown() -> Self {
+        Self {
+            s: "shutdown",
+            d: None,
+            t: 0,
+            topic: BROKER_WARN_TOPIC,
+        }
+    }
+    pub fn reg(name: &'a str) -> Self {
+        Self {
+            s: "reg",
+            d: Some(name),
+            t: 0,
+            topic: BROKER_INFO_TOPIC,
+        }
+    }
+    pub fn unreg(name: &'a str) -> Self {
+        Self {
+            s: "unreg",
+            d: Some(name),
+            t: 0,
+            topic: BROKER_INFO_TOPIC,
+        }
+    }
+    pub fn subject(&self) -> &str {
+        self.s
+    }
+    pub fn data(&self) -> Option<&str> {
+        self.d
+    }
+    pub fn time(&self) -> u64 {
+        self.t
+    }
+}
+
 struct BrokerDb {
     clients: RwLock<HashMap<String, BrokerClient>>,
     broadcasts: RwLock<BroadcastMap<BrokerClient>>,
@@ -591,6 +675,11 @@ impl Broker {
     pub fn set_core_rpc_client(&mut self, client: Arc<Mutex<RpcClient>>) {
         self.rpc_client.replace(client);
     }
+    #[cfg(feature = "rpc")]
+    /// Publish announce for clients
+    pub async fn announce(&self, event: BrokerEvent<'_>) -> Result<(), Error> {
+        announce(self.rpc_client.as_ref(), event).await
+    }
     pub fn register_client(&self, name: &str) -> Result<Client, Error> {
         let (c, rx) =
             ElbusClient::new(name, self.queue_size, ElbusClientType::Internal, None, None);
@@ -660,9 +749,7 @@ impl Broker {
         let rpc_client = if let Some(ref c) = self.rpc_client {
             c.clone()
         } else {
-            return Err(Error::not_supported(
-                "broker core RPC client not initialized",
-            ));
+            return Err(Error::not_supported(BROKER_NOT_INIT_ERR));
         };
         let _r = tokio::fs::remove_file(path).await;
         unix_named_pipe::create(path, Some(0o622))?;

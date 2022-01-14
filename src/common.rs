@@ -1,13 +1,13 @@
 #[cfg(feature = "rpc")]
 use crate::Error;
-#[cfg(feature = "serialization")]
+#[cfg(feature = "rpc")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "rpc")]
 use serde_value::Value;
 #[cfg(feature = "rpc")]
 use std::collections::HashMap;
 
-#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq)]
 pub struct ClientInfo<'a> {
     pub name: &'a str,
@@ -25,9 +25,9 @@ impl<'a> PartialOrd for ClientInfo<'a> {
         Some(self.cmp(other))
     }
 }
-#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
 pub struct ClientList<'a> {
-    #[cfg_attr(feature = "serialization", serde(borrow))]
+    #[cfg_attr(feature = "rpc", serde(borrow))]
     pub clients: Vec<ClientInfo<'a>>,
 }
 
@@ -59,4 +59,13 @@ pub fn str_to_params_map<'a>(s: &'a Vec<&str>) -> Result<HashMap<&'a str, Value>
         }
     }
     Ok(params)
+}
+
+#[allow(clippy::cast_sign_loss)]
+/// # Panics
+///
+/// Will panic if system clock is not available
+pub fn now_ns() -> u64 {
+    let t = nix::time::clock_gettime(nix::time::ClockId::CLOCK_REALTIME).unwrap();
+    t.tv_sec() as u64 * 1_000_000_000 + t.tv_nsec() as u64
 }

@@ -41,18 +41,18 @@ hex = { version = "0.4.3", optional = true }
 num-format = { version = "0.4.0", optional = true }
 serde-value = { version = "0.7.0", optional = true }
 atty = { version = "0.2", optional = true }
+nix = "0.22.1"
 
 [features]
 server = ["log", "syslog", "chrono", "colored", "clap",
           "lazy_static", "jemallocator", "fork", "broker"]
 broker = ["log", "submap", "async-trait", "unix-named-pipe"]
-broker-api = ["broker", "rpc", "serialization"]
+broker-api = ["broker", "rpc"]
 ipc = ["log", "async-trait"]
-rpc = ["log", "rmp-serde", "async-trait", "serde-value"]
-serialization = ["serde"]
-cli = ["ipc", "rpc", "serialization", "colored", "clap",
-  "env_logger", "bma-benchmark", "prettytable-rs",
-  "hostname", "hex", "num-format", "jemallocator", "serde_json", "atty"]
+rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value"]
+cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark",
+      "prettytable-rs", "hostname", "hex", "num-format", "jemallocator",
+      "serde_json", "atty"]
 
 [lib]
 name = "elbus"
@@ -74,11 +74,11 @@ required-features = ["broker"]
 
 [[example]]
 name = "broker_custom_rpc"
-required-features = ["broker", "rpc", "serialization"]
+required-features = ["broker", "rpc"]
 
 [[example]]
 name = "client_rpc_handler"
-required-features = ["ipc", "rpc", "serialization"]
+required-features = ["ipc", "rpc"]
 
 [[example]]
 name = "client_rpc"
