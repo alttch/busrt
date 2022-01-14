@@ -47,6 +47,13 @@ pub struct BrokerStats {
     pub w_bytes: u64,
 }
 
+#[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
+#[derive(Clone)]
+pub struct BrokerInfo<'a> {
+    pub author: &'a str,
+    pub version: &'a str,
+}
+
 #[allow(clippy::ptr_arg)]
 #[cfg(feature = "rpc")]
 pub fn str_to_params_map<'a>(s: &'a Vec<&str>) -> Result<HashMap<&'a str, Value>, Error> {

@@ -31,7 +31,7 @@ use crate::OP_ACK;
 
 use crate::borrow::Cow;
 use crate::client::AsyncClient;
-use crate::common::BrokerStats;
+use crate::common::{BrokerInfo, BrokerStats};
 #[cfg(feature = "rpc")]
 use crate::common::{ClientInfo, ClientList};
 use crate::{EventChannel, OpConfirm};
@@ -597,6 +597,9 @@ struct BrokerRpcHandlers {
 }
 
 #[cfg(feature = "rpc")]
+const RPC_OK: [u8; 5] = [129, 162, 111, 107, 195];
+
+#[cfg(feature = "rpc")]
 #[async_trait]
 impl RpcHandlers for BrokerRpcHandlers {
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
@@ -615,11 +618,13 @@ impl RpcHandlers for BrokerRpcHandlers {
                 if !params.is_empty() {
                     return Err(RpcError::params());
                 }
-                let mut payload = HashMap::new();
-                payload.insert("ok", Value::Bool(true));
-                payload.insert("version", Value::String(crate::VERSION.to_owned()));
-                payload.insert("author", Value::String(crate::AUTHOR.to_owned()));
-                Ok(Some(rmp_serde::to_vec_named(&payload)?))
+                Ok(Some(RPC_OK.to_vec()))
+            }
+            "info" => {
+                if !params.is_empty() {
+                    return Err(RpcError::params());
+                }
+                Ok(Some(rmp_serde::to_vec_named(&Broker::info())?))
             }
             "stats" => {
                 if !params.is_empty() {
@@ -761,6 +766,13 @@ impl Broker {
     #[inline]
     pub fn stats(&self) -> BrokerStats {
         self.db.stats()
+    }
+    #[inline]
+    pub fn info<'a>() -> BrokerInfo<'a> {
+        BrokerInfo {
+            author: crate::AUTHOR,
+            version: crate::VERSION,
+        }
     }
     #[cfg(feature = "rpc")]
     pub async fn init_default_core_rpc(&self) -> Result<(), Error> {

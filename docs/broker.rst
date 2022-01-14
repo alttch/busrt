@@ -15,7 +15,8 @@ Broker API
 When **rpc** feature is enabled, the following default RPC methods are
 available at **.broker** after *broker.init_default_core_rpc* method is called:
 
-* **test()** - broker test (returns version, author and ok: true)
+* **test()** - broker test (ok: true)
+* **info()** - broker info (author and version)
 * **stats()** - broker statistics
 * **client.list()** - list all connected clients
 * **benchmark.test(payload)** - test method, returns the payload as-is

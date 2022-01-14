@@ -3,7 +3,7 @@ use atty::Stream;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use elbus::client::AsyncClient;
-use elbus::common::{BrokerStats, ClientList};
+use elbus::common::{BrokerInfo, BrokerStats, ClientList};
 use elbus::ipc::{Client, Config};
 use elbus::rpc::{DummyHandlers, Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::{empty_payload, Error, Frame, QoS};
@@ -44,6 +44,8 @@ where
 enum BrokerCommand {
     #[clap(name = "client.list")]
     ClientList,
+    #[clap(name = "info")]
+    Info,
     #[clap(name = "stats")]
     Stats,
     #[clap(name = "test")]
@@ -202,7 +204,11 @@ async fn print_payload(payload: &[u8], silent: bool) {
         if !silent {
             println!("MSGPACK:");
         }
-        if let Ok(s) = serde_json::to_string_pretty(&map) {
+        if let Ok(s) = if silent {
+            serde_json::to_string(&map)
+        } else {
+            serde_json::to_string_pretty(&map)
+        } {
             println!("{}", s);
         } else {
             for (k, v) in map {
@@ -598,7 +604,7 @@ async fn main() {
                         .await
                         .unwrap();
                     let stats: BrokerStats = rmp_serde::from_read_ref(result.payload()).unwrap();
-                    let mut table = ctable(vec!["metric", "value"]);
+                    let mut table = ctable(vec!["field", "value"]);
                     table.add_row(row!["r_frames", stats.r_frames]);
                     table.add_row(row!["r_bytes", stats.r_bytes]);
                     table.add_row(row!["w_frames", stats.w_frames]);
@@ -606,10 +612,19 @@ async fn main() {
                     table.add_row(row!["uptime", stats.uptime]);
                     table.printstd();
                 }
+                BrokerCommand::Info => {
+                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let result = rpc.call(".broker", "info", empty_payload!()).await.unwrap();
+                    let info: BrokerInfo = rmp_serde::from_read_ref(result.payload()).unwrap();
+                    let mut table = ctable(vec!["field", "value"]);
+                    table.add_row(row!["author", info.author]);
+                    table.add_row(row!["version", info.version]);
+                    table.printstd();
+                }
                 BrokerCommand::Test => {
                     let mut rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc.call(".broker", "test", empty_payload!()).await.unwrap();
-                    print_payload(result.payload(), true).await;
+                    print_payload(result.payload(), opts.silent).await;
                 }
             }
         }
