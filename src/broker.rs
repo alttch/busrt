@@ -109,6 +109,7 @@ macro_rules! send_broadcast {
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus broadcast message from {} to {}", $client, $target);
+        #[allow(clippy::mutable_key_type)]
         let subs = { $db.broadcasts.read().unwrap().get_clients_by_mask($target) };
         if !subs.is_empty() {
             let frame = Arc::new(FrameData {
@@ -134,6 +135,7 @@ macro_rules! publish {
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus topic publish from {} to {}", $client, $topic);
+        #[allow(clippy::mutable_key_type)]
         let subs = { $db.subscriptions.read().unwrap().get_subscribers($topic) };
         if !subs.is_empty() {
             let frame = Arc::new(FrameData {
@@ -1095,7 +1097,7 @@ impl Broker {
                     client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
                     client
                         .r_bytes
-                        .fetch_add(len as u64, atomic::Ordering::SeqCst);
+                        .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
                     let sp = buf.split(|c| *c == 0);
                     {
                         let mut sdb = db.subscriptions.write().unwrap();
@@ -1113,7 +1115,7 @@ impl Broker {
                     client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
                     client
                         .r_bytes
-                        .fetch_add(len as u64, atomic::Ordering::SeqCst);
+                        .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
                     let sp = buf.split(|c| *c == 0);
                     {
                         let mut sdb = db.subscriptions.write().unwrap();
