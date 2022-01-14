@@ -1,5 +1,3 @@
-// TODO broker internal broadcast (topic) events
-// TODO broker info events
 // TODO tests
 // TODO rpc tests
 // TODO bus rpc: stats

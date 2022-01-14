@@ -6,9 +6,7 @@ use elbus::client::AsyncClient;
 use elbus::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::{Frame, QoS};
 use serde::Deserialize;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tokio::time::sleep;
 
 struct MyHandlers {}
@@ -55,14 +53,14 @@ impl RpcHandlers for MyHandlers {
 #[tokio::main]
 async fn main() {
     // create a new broker instance
-    let mut broker = Broker::new();
+    let mut broker = Broker::create().await;
     // spawn unix server for external clients
     broker
         .spawn_unix_server("/tmp/elbus.sock", 8192, Duration::from_secs(5))
         .await
         .unwrap();
     // register the broker core client
-    let mut core_client = broker.register_client(BROKER_NAME).unwrap();
+    let mut core_client = broker.register_client(BROKER_NAME).await.unwrap();
     // subscribe the core client to all topics to print publish frames when received
     core_client.subscribe("#", QoS::No).await.unwrap();
     // create handlers object
@@ -70,14 +68,21 @@ async fn main() {
     // create RPC
     let crpc = RpcClient::new(core_client, handlers);
     println!("Waiting for frames to {}", BROKER_NAME);
-    // set broker client, optional, allows to spawn fifo servers, the client need to be wrapped in
-    // Arc<Mutex<_>> as it is cloned for each fifo spawned
-    let core_rpc = Arc::new(Mutex::new(crpc));
-    broker.set_core_rpc_client(core_rpc.clone());
+    // set broker client, optional, allows to spawn fifo servers, the client is wrapped in
+    // Arc<Mutex<_>> as it is cloned for each fifo spawned and can be got back with core_rpc_client
+    // broker method
+    broker.set_core_rpc_client(crpc).await;
     // test it with echo .broker .hello > /tmp/elbus.fifo
     broker.spawn_fifo("/tmp/elbus.fifo", 8192).await.unwrap();
     // this is the internal client, it will be connected forever
-    while core_rpc.lock().await.is_connected() {
+    while broker
+        .core_rpc_client()
+        .lock()
+        .await
+        .as_ref()
+        .unwrap()
+        .is_connected()
+    {
         sleep(Duration::from_secs(1)).await;
     }
 }

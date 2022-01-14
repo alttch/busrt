@@ -51,7 +51,7 @@ pub const BROKER_WARN_TOPIC: &str = ".broker/warn";
 pub const BROKER_NAME: &str = ".broker";
 
 #[allow(dead_code)]
-const BROKER_NOT_INIT_ERR: &str = "broker core RPC client not initialized";
+const BROKER_RPC_NOT_INIT_ERR: &str = "broker core RPC client not initialized";
 
 macro_rules! pretty_error {
     ($name: expr, $err:expr) => {
@@ -74,32 +74,6 @@ macro_rules! make_confirm_channel {
             }
         }
     };
-}
-
-#[cfg(feature = "rpc")]
-#[inline]
-async fn announce(
-    rpc_candidate: Option<&Arc<Mutex<RpcClient>>>,
-    mut event: BrokerEvent<'_>,
-) -> Result<(), Error> {
-    if let Some(rpc_client) = rpc_candidate {
-        event.t = now_ns();
-        rpc_client
-            .lock()
-            .await
-            .client()
-            .lock()
-            .await
-            .publish(
-                event.topic,
-                rmp_serde::to_vec_named(&event).map_err(Error::data)?.into(),
-                QoS::No,
-            )
-            .await?;
-        Ok(())
-    } else {
-        Err(Error::not_supported(BROKER_NOT_INIT_ERR))
-    }
 }
 
 macro_rules! send {
@@ -309,14 +283,14 @@ impl AsyncClient for Client {
 
 impl Client {
     #[inline]
-    fn unregister(&self) {
-        self.db.unregister_client(&self.client);
+    pub async fn unregister(&self) {
+        self.db.unregister_client(&self.client).await;
     }
 }
 
 impl Drop for Client {
     fn drop(&mut self) {
-        self.unregister();
+        self.db.drop_client(&self.client);
     }
 }
 
@@ -445,6 +419,8 @@ struct BrokerDb {
     clients: RwLock<HashMap<String, BrokerClient>>,
     broadcasts: RwLock<BroadcastMap<BrokerClient>>,
     subscriptions: RwLock<SubMap<BrokerClient>>,
+    #[cfg(feature = "rpc")]
+    rpc_client: Arc<Mutex<Option<RpcClient>>>,
 }
 
 impl Default for BrokerDb {
@@ -458,12 +434,35 @@ impl Default for BrokerDb {
                     .wildcard("*"),
             ),
             subscriptions: RwLock::new(SubMap::new().separator('/').match_any("+").wildcard("#")),
+            #[cfg(feature = "rpc")]
+            rpc_client: <_>::default(),
         }
     }
 }
 
 impl BrokerDb {
-    fn register_client(&self, client: Arc<ElbusClient>) -> Result<(), Error> {
+    #[cfg(feature = "rpc")]
+    #[inline]
+    async fn announce(&self, mut event: BrokerEvent<'_>) -> Result<(), Error> {
+        if let Some(rpc_client) = self.rpc_client.lock().await.as_ref() {
+            event.t = now_ns();
+            rpc_client
+                .client()
+                .lock()
+                .await
+                .publish(
+                    event.topic,
+                    rmp_serde::to_vec_named(&event).map_err(Error::data)?.into(),
+                    QoS::No,
+                )
+                .await?;
+        }
+        Ok(())
+    }
+    async fn register_client(&self, client: Arc<ElbusClient>) -> Result<(), Error> {
+        #[cfg(feature = "rpc")]
+        // copy name for the announce
+        let name = client.name.clone();
         if let hash_map::Entry::Vacant(x) = self.clients.write().unwrap().entry(client.name.clone())
         {
             {
@@ -476,15 +475,27 @@ impl BrokerDb {
                 sdb.subscribe(BROKER_WARN_TOPIC, &client);
             }
             x.insert(client);
-            Ok(())
         } else {
-            Err(Error::busy(format!(
+            return Err(Error::busy(format!(
                 "the client is already registred: {}",
                 client.name
-            )))
+            )));
+        }
+        #[cfg(feature = "rpc")]
+        if let Err(e) = self.announce(BrokerEvent::reg(&name)).await {
+            error!("{}", e);
+        }
+        Ok(())
+    }
+    #[inline]
+    async fn unregister_client(&self, client: &Arc<ElbusClient>) {
+        self.drop_client(client);
+        #[cfg(feature = "rpc")]
+        if let Err(e) = self.announce(BrokerEvent::unreg(&client.name)).await {
+            error!("{}", e);
         }
     }
-    fn unregister_client(&self, client: &Arc<ElbusClient>) {
+    fn drop_client(&self, client: &Arc<ElbusClient>) {
         self.subscriptions
             .write()
             .unwrap()
@@ -500,8 +511,6 @@ pub struct Broker {
     db: Arc<BrokerDb>,
     services: Vec<JoinHandle<()>>,
     queue_size: usize,
-    #[cfg(feature = "rpc")]
-    rpc_client: Option<Arc<Mutex<RpcClient>>>,
 }
 
 #[cfg(feature = "broker-api")]
@@ -547,12 +556,6 @@ impl RpcHandlers for BrokerRpcHandlers {
     }
     async fn handle_notification(&self, _event: RpcEvent) {}
     async fn handle_frame(&self, _frame: Frame) {}
-}
-
-impl Default for Broker {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -643,7 +646,7 @@ where
 }
 
 impl Broker {
-    pub fn new() -> Self {
+    pub async fn create() -> Self {
         let broker_db: Arc<BrokerDb> = <_>::default();
         let mut broker = Self {
             #[cfg(feature = "broker-api")]
@@ -652,8 +655,6 @@ impl Broker {
             db: broker_db,
             services: <_>::default(),
             queue_size: 0,
-            #[cfg(feature = "rpc")]
-            rpc_client: None,
         };
         // avoid warning if rpc feature is not set
         broker.queue_size = DEFAULT_QUEUE_SIZE;
@@ -661,10 +662,11 @@ impl Broker {
         {
             let client = broker
                 .register_client(BROKER_NAME)
+                .await
                 .expect("can not register broker RPC");
             let handlers = BrokerRpcHandlers { db: broker_db };
             let rpc_client = RpcClient::new(client, handlers);
-            broker.rpc_client.replace(Arc::new(Mutex::new(rpc_client)));
+            broker.db.rpc_client.lock().await.replace(rpc_client);
         }
         broker
     }
@@ -672,19 +674,25 @@ impl Broker {
         self.queue_size = queue_size;
     }
     #[cfg(feature = "rpc")]
-    pub fn set_core_rpc_client(&mut self, client: Arc<Mutex<RpcClient>>) {
-        self.rpc_client.replace(client);
+    #[inline]
+    pub async fn set_core_rpc_client(&self, client: RpcClient) {
+        self.db.rpc_client.lock().await.replace(client);
+    }
+    #[cfg(feature = "rpc")]
+    #[inline]
+    pub fn core_rpc_client(&self) -> Arc<Mutex<Option<RpcClient>>> {
+        self.db.rpc_client.clone()
     }
     #[cfg(feature = "rpc")]
     /// Publish announce for clients
     pub async fn announce(&self, event: BrokerEvent<'_>) -> Result<(), Error> {
-        announce(self.rpc_client.as_ref(), event).await
+        self.db.announce(event).await
     }
-    pub fn register_client(&self, name: &str) -> Result<Client, Error> {
+    pub async fn register_client(&self, name: &str) -> Result<Client, Error> {
         let (c, rx) =
             ElbusClient::new(name, self.queue_size, ElbusClientType::Internal, None, None);
         let client = Arc::new(c);
-        self.db.register_client(client.clone())?;
+        self.db.register_client(client.clone()).await?;
         Ok(Client {
             name: name.to_owned(),
             client,
@@ -693,8 +701,8 @@ impl Broker {
         })
     }
     #[inline]
-    pub fn unregister_client(&self, client: &Client) {
-        self.db.unregister_client(&client.client);
+    pub async fn unregister_client(&self, client: &Client) {
+        self.db.unregister_client(&client.client).await;
     }
     pub async fn spawn_unix_server(
         &mut self,
@@ -746,11 +754,10 @@ impl Broker {
     /// Requires either broker-api feature or rpc feature + broker core rpc client to be set
     #[cfg(feature = "rpc")]
     pub async fn spawn_fifo(&mut self, path: &str, buf_size: usize) -> Result<(), Error> {
-        let rpc_client = if let Some(ref c) = self.rpc_client {
-            c.clone()
-        } else {
-            return Err(Error::not_supported(BROKER_NOT_INIT_ERR));
-        };
+        let rpc_client = self.db.rpc_client.clone();
+        if rpc_client.lock().await.is_none() {
+            return Err(Error::not_supported(BROKER_RPC_NOT_INIT_ERR));
+        }
         let _r = tokio::fs::remove_file(path).await;
         unix_named_pipe::create(path, Some(0o622))?;
         use std::os::unix::fs::PermissionsExt;
@@ -783,8 +790,17 @@ impl Broker {
         Ok(())
     }
     #[cfg(feature = "rpc")]
-    async fn send_fifo_cmd(rpc: &Arc<Mutex<RpcClient>>, line: String) -> Result<(), Error> {
+    async fn send_fifo_cmd(
+        rpc_c: &Arc<Mutex<Option<RpcClient>>>,
+        line: String,
+    ) -> Result<(), Error> {
         let cmd = line.trim();
+        let mut c = rpc_c.lock().await;
+        let rpc = if let Some(rpc) = c.as_mut() {
+            rpc
+        } else {
+            return Err(Error::not_supported(BROKER_RPC_NOT_INIT_ERR));
+        };
         // topic
         if let Some(s) = cmd.strip_prefix('=') {
             let mut sp = s.split(' ');
@@ -794,9 +810,7 @@ impl Broker {
             let payload = sp
                 .next()
                 .ok_or_else(|| Error::data("payload not specified"))?;
-            rpc.lock()
-                .await
-                .client()
+            rpc.client()
                 .lock()
                 .await
                 .publish(topic, payload.as_bytes().into(), QoS::No)
@@ -812,41 +826,32 @@ impl Broker {
                 .ok_or_else(|| Error::data("payload not specified"))?;
             // rpc notification
             if let Some(s) = payload.strip_prefix('.') {
-                rpc.lock()
-                    .await
-                    .notify(target, s.as_bytes().into(), QoS::No)
-                    .await?;
+                rpc.notify(target, s.as_bytes().into(), QoS::No).await?;
                 Ok(())
             } else if let Some(method) = payload.strip_prefix(':') {
                 let s = sp.collect::<Vec<&str>>();
                 let params = crate::common::str_to_params_map(&s)?;
-                rpc.lock()
-                    .await
-                    .call0(
-                        target,
-                        method,
-                        rmp_serde::to_vec_named(&params)
-                            .map_err(Error::data)?
-                            .into(),
-                    )
-                    .await?;
+                rpc.call0(
+                    target,
+                    method,
+                    rmp_serde::to_vec_named(&params)
+                        .map_err(Error::data)?
+                        .into(),
+                )
+                .await?;
                 Ok(())
             } else {
                 // regular message
                 // broadcast
                 if target.contains(&['*', '?'][..]) {
-                    rpc.lock()
-                        .await
-                        .client()
+                    rpc.client()
                         .lock()
                         .await
                         .send_broadcast(target, payload.as_bytes().into(), QoS::No)
                         .await?;
                     Ok(())
                 } else {
-                    rpc.lock()
-                        .await
-                        .client()
+                    rpc.client()
                         .lock()
                         .await
                         .send(target, payload.as_bytes().into(), QoS::No)
@@ -906,7 +911,7 @@ impl Broker {
                 params.source_port,
             );
             let client = Arc::new(c);
-            if let Err(e) = db.register_client(client.clone()) {
+            if let Err(e) = db.register_client(client.clone()).await {
                 write_and_flush!(&[e.kind as u8]);
                 return Err(e);
             }
@@ -987,7 +992,7 @@ impl Broker {
         });
         let result = Self::handle_reader(&db, client.clone(), &mut reader, timeout).await;
         writer_fut.abort();
-        db.unregister_client(&client);
+        db.unregister_client(&client).await;
         info!("elbus client disconnected: {}", client_name);
         result
     }

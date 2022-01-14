@@ -206,7 +206,7 @@ fn main() {
         }
         handle_term_signal!(SignalKind::interrupt(), false);
         handle_term_signal!(SignalKind::terminate(), true);
-        let mut broker = Broker::new();
+        let mut broker = Broker::create().await;
         broker.set_queue_size(opts.queue_size);
         let mut sock_files = SOCK_FILES.lock().await;
         for path in opts.path {

@@ -10,20 +10,21 @@ const SLEEP_STEP: Duration = Duration::from_secs(1);
 #[tokio::main]
 async fn main() {
     // create a new broker instance
-    let mut broker = Broker::new();
+    let mut broker = Broker::create().await;
     // spawn unix server for external clients
     broker
         .spawn_unix_server("/tmp/elbus.sock", 8192, Duration::from_secs(5))
         .await
         .unwrap();
     // worker 1 will send to worker2 direct "hello" message
-    let mut client1 = broker.register_client("worker.1").unwrap();
+    let mut client1 = broker.register_client("worker.1").await.unwrap();
     // worker 2 will listen to incoming frames only
-    let mut client2 = broker.register_client("worker.2").unwrap();
+    let mut client2 = broker.register_client("worker.2").await.unwrap();
     // worker 3 will send broadcasts to all workers, an external client with a name "worker.N" can
     // connect the broker via unix socket and receive them as well or send a message to "worker.2"
     // to print it
-    let mut client3 = broker.register_client("worker.3").unwrap();
+    let mut client3 = broker.register_client("worker.3").await.unwrap();
+    let rx = client2.take_event_channel().unwrap();
     tokio::spawn(async move {
         loop {
             client1
@@ -46,7 +47,6 @@ async fn main() {
             sleep(SLEEP_STEP).await;
         }
     });
-    let rx = client2.take_event_channel().unwrap();
     while let Ok(frame) = rx.recv().await {
         println!(
             "{}: {}",
