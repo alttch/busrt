@@ -566,14 +566,21 @@ async fn main() {
                     let mut clients: ClientList =
                         rmp_serde::from_read_ref(result.payload()).unwrap();
                     clients.clients.sort();
-                    let mut table = ctable(vec!["name", "type", "source", "port"]);
+                    let mut table = ctable(vec![
+                        "name", "type", "source", "port", "r_frames", "r_bytes", "w_frames",
+                        "w_bytes",
+                    ]);
                     for c in clients.clients {
                         if c.name != client_name {
                             table.add_row(row![
                                 c.name,
                                 c.tp,
                                 c.source.unwrap_or_default(),
-                                c.port.unwrap_or_default()
+                                c.port.unwrap_or_default(),
+                                fnum!(c.r_frames),
+                                fnum!(c.r_bytes),
+                                fnum!(c.w_frames),
+                                fnum!(c.w_bytes),
                             ]);
                         }
                     }

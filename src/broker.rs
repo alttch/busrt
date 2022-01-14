@@ -75,14 +75,17 @@ macro_rules! make_confirm_channel {
 }
 
 macro_rules! send {
-    ($db:expr, $client:expr, $target:expr, $header: expr, $buf:expr, $payload_pos:expr) => {{
+    ($db:expr, $client:expr, $target:expr, $header: expr,
+     $buf:expr, $payload_pos:expr, $len: expr) => {{
+        $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+        $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus message from {} to {}", $client, $target);
         let tx = {
-            $db.clients
-                .read()
-                .unwrap()
-                .get($target)
-                .map(|c| c.tx.clone())
+            $db.clients.read().unwrap().get($target).map(|c| {
+                c.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                c.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+                c.tx.clone()
+            })
         };
         if let Some(tx) = tx {
             let frame = Arc::new(FrameData {
@@ -101,7 +104,10 @@ macro_rules! send {
 }
 
 macro_rules! send_broadcast {
-    ($db:expr, $client:expr, $target:expr, $header: expr, $buf:expr, $payload_pos:expr) => {{
+    ($db:expr, $client:expr, $target:expr, $header: expr,
+     $buf:expr, $payload_pos:expr, $len: expr) => {{
+        $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+        $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus broadcast message from {} to {}", $client, $target);
         let subs = { $db.broadcasts.read().unwrap().get_clients_by_mask($target) };
         if !subs.is_empty() {
@@ -114,6 +120,8 @@ macro_rules! send_broadcast {
                 payload_pos: $payload_pos,
             });
             for sub in subs {
+                sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
                 let _r = sub.tx.send(frame.clone()).await;
             }
         }
@@ -121,7 +129,10 @@ macro_rules! send_broadcast {
 }
 
 macro_rules! publish {
-    ($db:expr, $client:expr, $topic:expr, $header: expr, $buf:expr, $payload_pos:expr) => {{
+    ($db:expr, $client:expr, $topic:expr, $header: expr,
+     $buf:expr, $payload_pos:expr, $len: expr) => {{
+        $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+        $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus topic publish from {} to {}", $client, $topic);
         let subs = { $db.subscriptions.read().unwrap().get_subscribers($topic) };
         if !subs.is_empty() {
@@ -134,6 +145,8 @@ macro_rules! publish {
                 payload_pos: $payload_pos,
             });
             for sub in subs {
+                sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
                 let _r = sub.tx.send(frame.clone()).await;
             }
         }
@@ -212,7 +225,8 @@ impl AsyncClient for Client {
         payload: Cow<'async_trait>,
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
-        send!(self.db, self.client, target, None, payload.to_vec(), 0)?;
+        let len = payload.len() as u64;
+        send!(self.db, self.client, target, None, payload.to_vec(), 0, len)?;
         make_confirm_channel!(qos)
     }
     #[inline]
@@ -223,13 +237,15 @@ impl AsyncClient for Client {
         payload: Cow<'async_trait>,
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
+        let len = (payload.len() + header.len()) as u64;
         send!(
             self.db,
             self.client,
             target,
             Some(header.to_vec()),
             payload.to_vec(),
-            0
+            0,
+            len
         )?;
         make_confirm_channel!(qos)
     }
@@ -240,7 +256,8 @@ impl AsyncClient for Client {
         payload: Cow<'async_trait>,
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
-        send_broadcast!(self.db, self.client, target, None, payload.to_vec(), 0);
+        let len = payload.len() as u64;
+        send_broadcast!(self.db, self.client, target, None, payload.to_vec(), 0, len);
         make_confirm_channel!(qos)
     }
     #[inline]
@@ -250,7 +267,8 @@ impl AsyncClient for Client {
         payload: Cow<'async_trait>,
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
-        publish!(self.db, self.client, topic, None, payload.to_vec(), 0);
+        let len = payload.len() as u64;
+        publish!(self.db, self.client, topic, None, payload.to_vec(), 0, len);
         make_confirm_channel!(qos)
     }
     #[inline]
@@ -326,6 +344,10 @@ struct ElbusClient {
     port: Option<String>,
     tx: async_channel::Sender<Frame>,
     registered: atomic::AtomicBool,
+    r_frames: atomic::AtomicU64,
+    r_bytes: atomic::AtomicU64,
+    w_frames: atomic::AtomicU64,
+    w_bytes: atomic::AtomicU64,
 }
 
 impl fmt::Display for ElbusClient {
@@ -351,6 +373,10 @@ impl ElbusClient {
                 port,
                 tx,
                 registered: atomic::AtomicBool::new(false),
+                r_frames: atomic::AtomicU64::new(0),
+                r_bytes: atomic::AtomicU64::new(0),
+                w_frames: atomic::AtomicU64::new(0),
+                w_bytes: atomic::AtomicU64::new(0),
             },
             rx,
         )
@@ -559,6 +585,10 @@ impl RpcHandlers for BrokerRpcHandlers {
                         tp: v.tp.as_str(),
                         source: v.source.as_deref(),
                         port: v.port.as_deref(),
+                        r_frames: v.r_frames.load(atomic::Ordering::SeqCst),
+                        r_bytes: v.r_bytes.load(atomic::Ordering::SeqCst),
+                        w_frames: v.w_frames.load(atomic::Ordering::SeqCst),
+                        w_bytes: v.w_bytes.load(atomic::Ordering::SeqCst),
                     })
                     .collect();
                 clients.sort();
@@ -1043,6 +1073,10 @@ impl Broker {
                     buf.push(OP_ACK);
                     buf.extend_from_slice(op_id);
                     buf.push($code);
+                    client.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    client
+                        .w_bytes
+                        .fetch_add(buf.len() as u64, atomic::Ordering::SeqCst);
                     client
                         .tx
                         .send(Arc::new(FrameData {
@@ -1058,6 +1092,10 @@ impl Broker {
             }
             match op {
                 FrameOp::SubscribeTopic => {
+                    client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    client
+                        .r_bytes
+                        .fetch_add(len as u64, atomic::Ordering::SeqCst);
                     let sp = buf.split(|c| *c == 0);
                     {
                         let mut sdb = db.subscriptions.write().unwrap();
@@ -1072,6 +1110,10 @@ impl Broker {
                     }
                 }
                 FrameOp::UnsubscribeTopic => {
+                    client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    client
+                        .r_bytes
+                        .fetch_add(len as u64, atomic::Ordering::SeqCst);
                     let sp = buf.split(|c| *c == 0);
                     {
                         let mut sdb = db.subscriptions.write().unwrap();
@@ -1094,7 +1136,8 @@ impl Broker {
                     drop(sp);
                     match op {
                         FrameOp::Message => {
-                            if let Err(e) = send!(db, client, target, None, buf, payload_pos) {
+                            let len = buf.len() as u64;
+                            if let Err(e) = send!(db, client, target, None, buf, payload_pos, len) {
                                 if qos == QoS::Processed {
                                     send_ack!(e.kind as u8);
                                 }
@@ -1103,13 +1146,15 @@ impl Broker {
                             }
                         }
                         FrameOp::Broadcast => {
-                            send_broadcast!(db, client, target, None, buf, payload_pos);
+                            let len = buf.len() as u64;
+                            send_broadcast!(db, client, target, None, buf, payload_pos, len);
                             if qos == QoS::Processed {
                                 send_ack!(RESPONSE_OK);
                             }
                         }
                         FrameOp::PublishTopic => {
-                            publish!(db, client, target, None, buf, payload_pos);
+                            let len = buf.len() as u64;
+                            publish!(db, client, target, None, buf, payload_pos, len);
                             if qos == QoS::Processed {
                                 send_ack!(RESPONSE_OK);
                             }

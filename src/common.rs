@@ -14,6 +14,10 @@ pub struct ClientInfo<'a> {
     pub tp: &'a str,
     pub source: Option<&'a str>,
     pub port: Option<&'a str>,
+    pub r_frames: u64,
+    pub r_bytes: u64,
+    pub w_frames: u64,
+    pub w_bytes: u64,
 }
 impl<'a> Ord for ClientInfo<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
