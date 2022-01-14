@@ -282,15 +282,22 @@ impl AsyncClient for Client {
 }
 
 impl Client {
+    /// When a internal client is dropped, it is automatically dropped from the broker db, but no
+    /// announce is sent. It is better to manually call "unregister" method before.
     #[inline]
     pub async fn unregister(&self) {
+        self.client
+            .registered
+            .store(false, atomic::Ordering::SeqCst);
         self.db.unregister_client(&self.client).await;
     }
 }
 
 impl Drop for Client {
     fn drop(&mut self) {
-        self.db.drop_client(&self.client);
+        if self.client.registered.load(atomic::Ordering::SeqCst) {
+            self.db.drop_client(&self.client);
+        }
     }
 }
 
@@ -320,6 +327,7 @@ struct ElbusClient {
     source: Option<String>,
     port: Option<String>,
     tx: async_channel::Sender<Frame>,
+    registered: atomic::AtomicBool,
 }
 
 impl fmt::Display for ElbusClient {
@@ -344,6 +352,7 @@ impl ElbusClient {
                 source,
                 port,
                 tx,
+                registered: atomic::AtomicBool::new(false),
             },
             rx,
         )
@@ -459,10 +468,19 @@ impl BrokerDb {
         }
         Ok(())
     }
+    #[inline]
     async fn register_client(&self, client: Arc<ElbusClient>) -> Result<(), Error> {
         #[cfg(feature = "rpc")]
         // copy name for the announce
         let name = client.name.clone();
+        self.insert_client(client)?;
+        #[cfg(feature = "rpc")]
+        if let Err(e) = self.announce(BrokerEvent::reg(&name)).await {
+            error!("{}", e);
+        }
+        Ok(())
+    }
+    fn insert_client(&self, client: Arc<ElbusClient>) -> Result<(), Error> {
         if let hash_map::Entry::Vacant(x) = self.clients.write().unwrap().entry(client.name.clone())
         {
             {
@@ -474,16 +492,13 @@ impl BrokerDb {
                 sdb.register_client(&client);
                 sdb.subscribe(BROKER_WARN_TOPIC, &client);
             }
+            client.registered.store(true, atomic::Ordering::SeqCst);
             x.insert(client);
         } else {
             return Err(Error::busy(format!(
                 "the client is already registred: {}",
                 client.name
             )));
-        }
-        #[cfg(feature = "rpc")]
-        if let Err(e) = self.announce(BrokerEvent::reg(&name)).await {
-            error!("{}", e);
         }
         Ok(())
     }
