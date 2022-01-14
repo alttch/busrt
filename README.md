@@ -3,10 +3,7 @@
 <img src="https://raw.githubusercontent.com/alttch/elbus/main/docs/images/logo-dark.svg"
 width="200" />
 
-Note: the project is under development and in alpha stage
-
 <https://elbus.bma.ai/>
-
 
 ## What is elbus
 
