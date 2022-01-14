@@ -1,7 +1,4 @@
 // TODO bus rpc: stats
-// TODO tests
-// TODO rpc tests
-// TODO release
 use std::fmt;
 use std::sync::Arc;
 
