@@ -127,8 +127,8 @@ struct Opts {
     path: String,
     #[clap(short = 'n', long = "name")]
     name: Option<String>,
-    #[clap(long = "read-buf", default_value = "8192")]
-    read_buf: usize,
+    #[clap(long = "buf-size", default_value = "8192")]
+    buf_size: usize,
     #[clap(long = "queue-size", default_value = "8192")]
     queue_size: usize,
     #[clap(long = "timeout", default_value = "5")]
@@ -334,7 +334,7 @@ async fn get_payload(candidate: &Option<String>) -> Vec<u8> {
 
 async fn create_client(opts: &Opts, name: &str) -> Client {
     let config = Config::new(&opts.path, name)
-        .read_buf(opts.read_buf)
+        .read_buf(opts.buf_size)
         .queue_size(opts.queue_size)
         .timeout(Duration::from_secs_f32(opts.timeout));
     Client::connect(&config)
