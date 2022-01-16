@@ -129,7 +129,7 @@ Handler benchmarks over HTTP usually require an additional abstraction layer
 (e.g. web sockets), which makes things even more worse.
 
 Comparison of "qos.no" stages is useless, as HTTP always must return some
-response, even if it is has no content.
+response, even if it has no content.
 
 ## About the authors
 
