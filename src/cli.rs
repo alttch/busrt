@@ -20,6 +20,7 @@ use tokio::time::sleep;
 #[macro_use]
 extern crate bma_benchmark;
 
+#[cfg(not(feature = "std-alloc"))]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 

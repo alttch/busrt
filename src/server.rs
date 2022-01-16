@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+#[cfg(not(feature = "std-alloc"))]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 

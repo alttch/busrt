@@ -36,6 +36,8 @@ Crate features
 * **broker** - enable broker
 * **server** - build stand-alone broker server
 * **cli** - build CLI tool
+* **std-alloc** - forcibly use the standard memory allocator for server/cli
+  (enable in case of problems with jemalloc)
 
 .. include:: readme.rst
 
