@@ -14,6 +14,11 @@ flexible and very easy to use.
 The library can be embedded in any Rust project or be used as a standalone
 server.
 
+NOTE: elbus is not officially released yet and SDK can be changed at any time
+without any backward compatibility. elbus (stands actually for "EVA ICS Local
+Bus") is the key component for [EVA ICS](https://www.eva-ics.com/) v4, which is
+going to be released in 2022-2023.
+
 ## Documentation
 
 Available at <https://elbus.readthedocs.io/>
