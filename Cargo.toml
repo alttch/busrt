@@ -52,6 +52,7 @@ rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value"]
 cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark",
       "prettytable-rs", "hostname", "hex", "num-format", "jemallocator",
       "serde_json", "atty"]
+full = ["rpc", "ipc", "broker"]
 std-alloc = []
 
 [lib]

@@ -34,6 +34,7 @@ Crate features
 * **ipc** - enable IPC client
 * **rpc** - enable optional RPC layer
 * **broker** - enable broker
+* **full** - IPC+RPC+broker
 * **server** - build stand-alone broker server
 * **cli** - build CLI tool
 * **std-alloc** - forcibly use the standard memory allocator for server/cli
