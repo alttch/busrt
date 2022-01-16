@@ -117,7 +117,7 @@ elbus /tmp/elbus.sock benchmark -w10 --payload-size 500
 According to tests, elbus, with all its functionality, is minimum 3-5 times
 FASTER than any simple HTTP RPC/notification service
 send.qos.processed/rpc.call benchmarks (e.g. [simple
-RPC](https://gist.github.com/divi255/e166673c5bc8cb833456a0acf6d951bf)) build
+RPC](https://gist.github.com/divi255/e166673c5bc8cb833456a0acf6d951bf) build
 with one of the fastest, but still HTTP framework [Hyper](https://hyper.rs)).
 Handler benchmarks over HTTP usually require an additional abstraction layer
 (e.g. web sockets), which makes things even more worse.
