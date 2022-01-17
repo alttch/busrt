@@ -86,7 +86,7 @@ struct Opts {
     log_syslog: bool,
     #[clap(short = 'w', default_value = "4")]
     workers: usize,
-    #[clap(short = 't', default_value = "1", help = "timeout (seconds)")]
+    #[clap(short = 't', default_value = "5", help = "timeout (seconds)")]
     timeout: f64,
     #[clap(
         long = "buf-size",
