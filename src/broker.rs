@@ -685,7 +685,8 @@ fn prepare_unix_source(_addr: tokio::net::unix::SocketAddr) -> Option<String> {
 }
 
 macro_rules! spawn_server {
-    ($self: expr, $path: expr, $listener: expr, $buf_size: expr, $buf_ttl: expr, $timeout: expr, $tp: expr,
+    ($self: expr, $path: expr, $listener: expr, $buf_size: expr,
+     $buf_ttl: expr, $timeout: expr, $tp: expr,
      $prepare: ident, $prepare_source: ident) => {{
         let socket_path = $path.to_owned();
         let db = $self.db.clone();
