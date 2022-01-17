@@ -335,7 +335,7 @@ async fn get_payload(candidate: &Option<String>) -> Vec<u8> {
 
 async fn create_client(opts: &Opts, name: &str) -> Client {
     let config = Config::new(&opts.path, name)
-        .read_buf(opts.buf_size)
+        .buf_size(opts.buf_size)
         .queue_size(opts.queue_size)
         .timeout(Duration::from_secs_f32(opts.timeout));
     Client::connect(&config)

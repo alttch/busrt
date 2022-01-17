@@ -15,13 +15,13 @@ where
     pub fn new(writer: W, cap: usize, ttl: Duration, timeout: Duration) -> Self {
         let writer = Arc::new(Mutex::new(BufWriter::with_capacity(cap, writer)));
         let wf = writer.clone();
-        let (tx, rx) = async_channel::bounded(1);
+        let (tx, rx) = async_channel::bounded::<bool>(1);
         tokio::spawn(async move {
             while let Ok(x) = rx.recv().await {
                 tokio::time::sleep(ttl).await;
                 let mut writer = wf.lock().await;
-                let _ = tokio::time::timeout(timeout, writer.flush()).await;
-                if x == false {
+                let _r = tokio::time::timeout(timeout, writer.flush()).await;
+                if !x {
                     break;
                 }
             }

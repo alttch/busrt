@@ -188,6 +188,8 @@ fn main() {
         }
     }
     let timeout = Duration::from_secs_f64(opts.timeout);
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
     let buf_ttl = Duration::from_nanos((opts.buf_ttl * 1000.0) as u64);
     info!(
         "starting elbus server, {} workers, buf size: {}, queue size: {}, timeout: {:?}",
