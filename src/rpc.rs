@@ -517,14 +517,7 @@ impl Rpc for RpcClient {
                 ));
             }
         }
-        let result = if let Some(timeout) = self.timeout {
-            tokio::time::timeout(timeout, rx)
-                .await
-                .map_err(Into::<Error>::into)?
-                .map_err(Into::<Error>::into)?
-        } else {
-            rx.await.map_err(Into::<Error>::into)?
-        };
+        let result = rx.await.map_err(Into::<Error>::into)?;
         if let Ok(e) = TryInto::<RpcError>::try_into(&result) {
             Err(e)
         } else {
