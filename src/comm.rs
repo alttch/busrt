@@ -1,11 +1,15 @@
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncWriteExt, BufWriter};
+use tokio::sync::oneshot;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
 pub struct TtlBufWriter<W> {
     writer: Arc<Mutex<BufWriter<W>>>,
     tx: async_channel::Sender<bool>,
+    dtx: Option<oneshot::Sender<bool>>,
+    flusher: JoinHandle<()>,
 }
 
 impl<W> TtlBufWriter<W>
@@ -16,17 +20,26 @@ where
         let writer = Arc::new(Mutex::new(BufWriter::with_capacity(cap, writer)));
         let wf = writer.clone();
         let (tx, rx) = async_channel::bounded::<bool>(1);
-        tokio::spawn(async move {
-            while let Ok(x) = rx.recv().await {
+        let flusher = tokio::spawn(async move {
+            while let Ok(_) = rx.recv().await {
                 tokio::time::sleep(ttl).await;
-                let mut writer = wf.lock().await;
+                let mut writer = tokio::time::timeout(timeout, wf.lock()).await.unwrap();
                 let _r = tokio::time::timeout(timeout, writer.flush()).await;
-                if !x {
-                    break;
-                }
             }
         });
-        Self { writer, tx }
+        let (dtx, drx) = oneshot::channel();
+        let wf = writer.clone();
+        tokio::spawn(async move {
+            let _r = drx.await;
+            let mut writer = wf.lock().await;
+            let _r = tokio::time::timeout(timeout, writer.flush()).await;
+        });
+        Self {
+            writer,
+            tx,
+            dtx: Some(dtx),
+            flusher,
+        }
     }
     #[inline]
     pub async fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
@@ -43,6 +56,7 @@ where
 
 impl<W> Drop for TtlBufWriter<W> {
     fn drop(&mut self) {
-        let _ = self.tx.try_send(false);
+        self.flusher.abort();
+        self.dtx.take().unwrap().send(true).unwrap();
     }
 }
