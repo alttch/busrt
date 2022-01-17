@@ -100,6 +100,8 @@ announcements etc.
 
 ## Some numbers
 
+### Benchmarks
+
 CPU: AMD Ryzen 9 5950X
 
 Broker: 8 workers, clients: 10, payload size: 500 bytes, local IPC (single unix
@@ -119,6 +121,8 @@ elbus /tmp/elbus.sock benchmark -w10 --payload-size 500
 | send.qos.no              | 3\_019\_431 |
 | send.qos.processed       | 446\_416    |
 
+## elbus vs HTTP
+
 According to tests, elbus, with all its functionality, is minimum 3-5 times
 FASTER than any simple HTTP RPC/notification service
 send.qos.processed/rpc.call benchmarks (e.g. [simple
@@ -130,6 +134,16 @@ Handler benchmarks over HTTP usually require an additional abstraction layer
 
 Comparison of "qos.no" stages is useless, as HTTP always must return some
 response, even if it has no content.
+
+## elbus vs NATS
+
+TCP vs TCP: the speeds are similar. [NATS](https://nats.io) can be faster in
+some cases, especially with multiple (>20) clients, while elbus usually has
+lower latency. Using its zero-copy model, elbus provides higher (+25-30%)
+numbers for payloads > 5 KBytes.
+
+TCP vs Unix: when clients are connected in UNIX socket IPC mode, elbus is
+usually always 30% faster.
 
 ## About the authors
 
