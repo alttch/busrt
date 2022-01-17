@@ -191,10 +191,12 @@ fn main() {
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::cast_sign_loss)]
     let buf_ttl = Duration::from_nanos((opts.buf_ttl * 1000.0) as u64);
-    info!(
-        "starting elbus server, {} workers, buf size: {}, queue size: {}, timeout: {:?}",
-        opts.workers, opts.buf_size, opts.queue_size, timeout
-    );
+    info!("starting elbus server");
+    info!("workers: {}", opts.workers);
+    info!("buf size: {}", opts.buf_size);
+    info!("buf ttl: {:?}", buf_ttl);
+    info!("queue size: {}", opts.queue_size);
+    info!("timeout: {:?}", timeout);
     if opts.daemonize {
         if let Ok(fork::Fork::Child) = fork::daemon(true, false) {
             std::process::exit(0);
