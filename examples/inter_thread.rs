@@ -15,7 +15,12 @@ async fn main() {
     broker.init_default_core_rpc().await.unwrap();
     // spawn unix server for external clients
     broker
-        .spawn_unix_server("/tmp/elbus.sock", 8192, Duration::from_secs(5))
+        .spawn_unix_server(
+            "/tmp/elbus.sock",
+            8192,
+            Duration::from_millis(1),
+            Duration::from_secs(5),
+        )
         .await
         .unwrap();
     // worker 1 will send to worker2 direct "hello" message

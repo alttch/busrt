@@ -11,6 +11,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::borrow::Cow;
+use crate::comm::TtlBufWriter;
 use crate::Error;
 use crate::EventChannel;
 use crate::IntoElbusResult;
@@ -29,14 +30,15 @@ use log::{error, trace, warn};
 use async_trait::async_trait;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(1);
-pub const DEFAULT_READ_BUF: usize = 8192;
+pub const DEFAULT_BUF_TTL: Duration = Duration::from_micros(1);
+pub const DEFAULT_BUF_SIZE: usize = 8192;
 pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 
 type ResponseMap = Arc<Mutex<BTreeMap<u32, oneshot::Sender<Result<(), Error>>>>>;
 
 enum Writer {
-    Unix(unix::OwnedWriteHalf),
-    Tcp(tcp::OwnedWriteHalf),
+    Unix(TtlBufWriter<unix::OwnedWriteHalf>),
+    Tcp(TtlBufWriter<tcp::OwnedWriteHalf>),
 }
 
 impl Writer {
@@ -52,7 +54,8 @@ impl Writer {
 pub struct Config {
     path: String,
     name: String,
-    read_buf: usize,
+    buf_size: usize,
+    buf_ttl: Duration,
     queue_size: usize,
     timeout: Duration,
 }
@@ -64,13 +67,18 @@ impl Config {
         Self {
             path: path.to_owned(),
             name: name.to_owned(),
-            read_buf: DEFAULT_READ_BUF,
+            buf_size: DEFAULT_BUF_SIZE,
+            buf_ttl: DEFAULT_BUF_TTL,
             queue_size: DEFAULT_QUEUE_SIZE,
             timeout: DEFAULT_TIMEOUT,
         }
     }
-    pub fn read_buf(mut self, size: usize) -> Self {
-        self.read_buf = size;
+    pub fn buf_size(mut self, size: usize) -> Self {
+        self.buf_size = size;
+        self
+    }
+    pub fn buf_ttl(mut self, ttl: Duration) -> Self {
+        self.buf_ttl = ttl;
         self
     }
     pub fn queue_size(mut self, size: usize) -> Self {
@@ -196,7 +204,7 @@ impl Client {
         {
             let stream = UnixStream::connect(&config.path).await?;
             let (r, mut writer) = stream.into_split();
-            let mut reader = BufReader::with_capacity(config.read_buf, r);
+            let mut reader = BufReader::with_capacity(config.buf_size, r);
             let (reader_fut, rx) = connect_broker!(
                 &config.name,
                 reader,
@@ -206,12 +214,21 @@ impl Client {
                 config.timeout,
                 config.queue_size
             );
-            (Writer::Unix(writer), reader_fut, rx)
+            (
+                Writer::Unix(TtlBufWriter::new(
+                    writer,
+                    config.buf_size,
+                    config.buf_ttl,
+                    config.timeout,
+                )),
+                reader_fut,
+                rx,
+            )
         } else {
             let stream = TcpStream::connect(&config.path).await?;
             stream.set_nodelay(true)?;
             let (r, mut writer) = stream.into_split();
-            let mut reader = BufReader::with_capacity(config.read_buf, r);
+            let mut reader = BufReader::with_capacity(config.buf_size, r);
             let (reader_fut, rx) = connect_broker!(
                 &config.name,
                 reader,
@@ -221,7 +238,16 @@ impl Client {
                 config.timeout,
                 config.queue_size
             );
-            (Writer::Tcp(writer), reader_fut, rx)
+            (
+                Writer::Tcp(TtlBufWriter::new(
+                    writer,
+                    config.buf_size,
+                    config.buf_ttl,
+                    config.timeout,
+                )),
+                reader_fut,
+                rx,
+            )
         };
         Ok(Self {
             name: config.name.clone(),

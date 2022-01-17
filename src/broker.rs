@@ -14,7 +14,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
 use submap::{BroadcastMap, SubMap};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, BufWriter};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream, UnixListener, UnixStream};
 #[cfg(feature = "rpc")]
 use tokio::sync::Mutex;
@@ -23,6 +23,7 @@ use tokio::time;
 
 use crate::{Error, ErrorKind, GREETINGS, PROTOCOL_VERSION};
 
+use crate::comm::TtlBufWriter;
 use crate::ERR_DATA;
 use crate::ERR_NOT_SUPPORTED;
 use crate::RESPONSE_OK;
@@ -684,7 +685,7 @@ fn prepare_unix_source(_addr: tokio::net::unix::SocketAddr) -> Option<String> {
 }
 
 macro_rules! spawn_server {
-    ($self: expr, $path: expr, $listener: expr, $buf_size: expr, $timeout: expr, $tp: expr,
+    ($self: expr, $path: expr, $listener: expr, $buf_size: expr, $buf_ttl: expr, $timeout: expr, $tp: expr,
      $prepare: ident, $prepare_source: ident) => {{
         let socket_path = $path.to_owned();
         let db = $self.db.clone();
@@ -704,7 +705,7 @@ macro_rules! spawn_server {
                         }
                         let (reader, writer) = stream.into_split();
                         let reader = BufReader::with_capacity($buf_size, reader);
-                        let writer = BufWriter::with_capacity($buf_size, writer);
+                        let writer = TtlBufWriter::new(writer, $buf_size, $buf_ttl, $timeout);
                         let cdb = db.clone();
                         let name = socket_path.clone();
                         let client_source = $prepare_source(addr);
@@ -737,11 +738,11 @@ macro_rules! spawn_server {
 struct PeerHandlerParams<R, W>
 where
     R: AsyncReadExt + Unpin,
-    W: AsyncWriteExt + Unpin + Send + 'static,
+    W: AsyncWriteExt + Unpin + Send + Sync + 'static,
 {
     db: Arc<BrokerDb>,
     reader: R,
-    writer: W,
+    writer: TtlBufWriter<W>,
     timeout: Duration,
     queue_size: usize,
     tp: ElbusClientType,
@@ -823,6 +824,7 @@ impl Broker {
         &mut self,
         path: &str,
         buf_size: usize,
+        buf_ttl: Duration,
         timeout: Duration,
     ) -> Result<(), Error> {
         let _r = tokio::fs::remove_file(path).await;
@@ -832,6 +834,7 @@ impl Broker {
             path,
             listener,
             buf_size,
+            buf_ttl,
             timeout,
             ElbusClientType::LocalIpc,
             prepare_unix_stream,
@@ -843,6 +846,7 @@ impl Broker {
         &mut self,
         path: &str,
         buf_size: usize,
+        buf_ttl: Duration,
         timeout: Duration,
     ) -> Result<(), Error> {
         let listener = TcpListener::bind(path).await?;
@@ -851,6 +855,7 @@ impl Broker {
             path,
             listener,
             buf_size,
+            buf_ttl,
             timeout,
             ElbusClientType::Tcp,
             prepare_tcp_stream,
@@ -980,7 +985,7 @@ impl Broker {
     async fn handle_peer<R, W>(params: PeerHandlerParams<R, W>) -> Result<(), Error>
     where
         R: AsyncReadExt + Unpin,
-        W: AsyncWriteExt + Unpin + Send + 'static,
+        W: AsyncWriteExt + Unpin + Send + Sync + 'static,
     {
         let timeout = params.timeout;
         let mut reader = params.reader;
@@ -1055,25 +1060,8 @@ impl Broker {
                         }
                     };
                 }
-                macro_rules! flush {
-                    () => {
-                        match time::timeout(timeout, writer.flush()).await {
-                            Ok(result) => {
-                                if let Err(e) = result {
-                                    pretty_error!(w_name, Into::<Error>::into(&e));
-                                    break;
-                                }
-                            }
-                            Err(_) => {
-                                error!("client {} error: timeout", w_name);
-                                break;
-                            }
-                        }
-                    };
-                }
                 if frame.kind == FrameKind::Prepared {
                     write_data!(&frame.buf);
-                    flush!();
                 } else {
                     let sender = frame.sender.as_ref().unwrap().as_bytes();
                     let topic = frame.topic.as_ref().map(String::as_bytes);
@@ -1101,7 +1089,6 @@ impl Broker {
                         write_data!(header);
                     }
                     write_data!(frame.payload());
-                    flush!();
                 }
             }
         });

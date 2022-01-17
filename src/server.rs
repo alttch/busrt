@@ -86,7 +86,7 @@ struct Opts {
     log_syslog: bool,
     #[clap(short = 'w', default_value = "4")]
     workers: usize,
-    #[clap(short = 't', default_value = "1")]
+    #[clap(short = 't', default_value = "1", help = "timeout (seconds)")]
     timeout: f64,
     #[clap(
         long = "buf-size",
@@ -94,6 +94,12 @@ struct Opts {
         help = "I/O buffer size, per client"
     )]
     buf_size: usize,
+    #[clap(
+        long = "buf-ttl",
+        default_value = "1",
+        help = "Write buffer TTL (microseconds)"
+    )]
+    buf_ttl: f64,
     #[clap(
         long = "queue-size",
         default_value = "8192",
@@ -182,6 +188,7 @@ fn main() {
         }
     }
     let timeout = Duration::from_secs_f64(opts.timeout);
+    let buf_ttl = Duration::from_nanos((opts.buf_ttl * 1000.0) as u64);
     info!(
         "starting elbus server, {} workers, buf size: {}, queue size: {}, timeout: {:?}",
         opts.workers, opts.buf_size, opts.queue_size, timeout
@@ -230,13 +237,13 @@ fn main() {
                 || path.starts_with('/')
             {
                 broker
-                    .spawn_unix_server(&path, opts.buf_size, timeout)
+                    .spawn_unix_server(&path, opts.buf_size, buf_ttl, timeout)
                     .await
                     .expect("Unable to start unix server");
                 sock_files.push(path);
             } else {
                 broker
-                    .spawn_tcp_server(&path, opts.buf_size, timeout)
+                    .spawn_tcp_server(&path, opts.buf_size, buf_ttl, timeout)
                     .await
                     .expect("Unable to start tcp server");
             }
