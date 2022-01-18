@@ -38,15 +38,18 @@ where
         let writer = Arc::new(Mutex::new(BufWriter::with_capacity(cap, writer)));
         let wf = writer.clone();
         let (tx, rx) = async_channel::bounded::<bool>(1);
+        // flusher future
         let flusher = tokio::spawn(async move {
-            while let Ok(_) = rx.recv().await {
+            while rx.recv().await.is_ok() {
                 tokio::time::sleep(ttl).await;
-                let mut writer = tokio::time::timeout(timeout, wf.lock()).await.unwrap();
-                let _r = tokio::time::timeout(timeout, writer.flush()).await;
+                if let Ok(mut writer) = tokio::time::timeout(timeout, wf.lock()).await {
+                    let _r = tokio::time::timeout(timeout, writer.flush()).await;
+                }
             }
         });
         let (dtx, drx) = oneshot::channel();
         let wf = writer.clone();
+        // this future works on drop
         tokio::spawn(async move {
             let _r = drx.await;
             let mut writer = wf.lock().await;
