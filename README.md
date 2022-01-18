@@ -102,30 +102,27 @@ announcements etc.
 
 ### Benchmarks
 
-CPU: AMD Ryzen 9 5950X
+CPU: i7-7700HQ
 
-Broker: 8 workers, clients: 10, payload size: 500 bytes, local IPC (single unix
+Broker: 4 workers, clients: 8, payload size: 100 bytes, local IPC (single unix
 socket), totals:
-
-```shell
-elbus /tmp/elbus.sock benchmark -w10 --payload-size 500
-```
 
 | stage                    | iters/s     |
 |--------------------------|-------------|
-| rpc.call                 | 358\_513    |
-| rpc.call+handle          | 187\_043    |
-| rpc.call0                | 446\_663    |
-| send+recv.qos.no         | 478\_062    |
-| send+recv.qos.processed  | 375\_817    |
-| send.qos.no              | 3\_019\_431 |
-| send.qos.processed       | 446\_416    |
+| rpc.call                 | 126\_824    |
+| rpc.call+handle          | 64\_694     |
+| rpc.call0                | 178\_505    |
+| send+recv.qos.no         | 1\_667\_131 |
+| send+recv.qos.processed  | 147\_812    |
+| send.qos.no              | 2\_748\_870 |
+| send.qos.processed       | 183\_795    |
 
 ## elbus vs NATS
 
 According to benchmarks, elbus is usually faster than NATS in typical common
 tasks (with no QoS), but to avoid holy wars we do not provide any numbers.
-Please benchmark by yourself.
+[Please do benchmark by
+yourself](https://gist.github.com/divi255/683ae8e9c0c63e34f49e058aeb536349).
 
 ## About the authors
 
