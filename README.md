@@ -124,8 +124,8 @@ elbus /tmp/elbus.sock benchmark -w10 --payload-size 500
 ## elbus vs NATS
 
 According to benchmarks, elbus is usually faster than NATS in typical common
-tasks, but to avoid holy wars we do not provide any numbers. Please benchmark
-by yourself.
+tasks (with no QoS), but to avoid holy wars we do not provide any numbers.
+Please benchmark by yourself.
 
 ## About the authors
 
