@@ -30,7 +30,7 @@ use log::{error, trace, warn};
 use async_trait::async_trait;
 
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(1);
-pub const DEFAULT_BUF_TTL: Duration = Duration::from_micros(1);
+pub const DEFAULT_BUF_TTL: Duration = Duration::from_micros(10);
 pub const DEFAULT_BUF_SIZE: usize = 8192;
 pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 

@@ -84,6 +84,7 @@ pub fn str_to_params_map<'a>(s: &'a Vec<&str>) -> Result<HashMap<&'a str, Value>
     Ok(params)
 }
 
+#[cfg(feature = "broker")]
 #[allow(clippy::cast_sign_loss)]
 /// # Panics
 ///

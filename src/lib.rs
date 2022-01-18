@@ -421,5 +421,5 @@ pub mod rpc;
 
 #[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]
 pub mod client;
-#[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]
+#[cfg(any(feature = "broker", feature = "ipc"))]
 pub mod comm;

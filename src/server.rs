@@ -96,8 +96,8 @@ struct Opts {
     buf_size: usize,
     #[clap(
         long = "buf-ttl",
-        default_value = "1",
-        help = "Write buffer TTL (milliseconds)"
+        default_value = "10",
+        help = "Write buffer TTL (microseconds)"
     )]
     buf_ttl: u64,
     #[clap(
@@ -188,7 +188,7 @@ fn main() {
         }
     }
     let timeout = Duration::from_secs_f64(opts.timeout);
-    let buf_ttl = Duration::from_millis(opts.buf_ttl);
+    let buf_ttl = Duration::from_micros(opts.buf_ttl);
     info!("starting elbus server");
     info!("workers: {}", opts.workers);
     info!("buf size: {}", opts.buf_size);

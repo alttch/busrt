@@ -41,7 +41,7 @@ where
         // flusher future
         let flusher = tokio::spawn(async move {
             while rx.recv().await.is_ok() {
-                tokio::time::sleep(ttl).await;
+                let _r = tokio_timerfd::sleep(ttl).await;
                 if let Ok(mut writer) = tokio::time::timeout(timeout, wf.lock()).await {
                     let _r = tokio::time::timeout(timeout, writer.flush()).await;
                 }
