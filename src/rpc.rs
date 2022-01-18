@@ -593,6 +593,7 @@ impl RpcError {
             data: err,
         }
     }
+    /// Converts displayable to Vec<u8>
     #[inline]
     pub fn convert_data(v: impl fmt::Display) -> Vec<u8> {
         v.to_string().as_bytes().to_vec()
