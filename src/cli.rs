@@ -445,7 +445,7 @@ impl RpcHandlers for BenchmarkHandlers {
         if event.parse_method()? == "benchmark.selftest" {
             Ok(Some(event.payload().to_vec()))
         } else {
-            Err(RpcError::method())
+            Err(RpcError::method(None))
         }
     }
 }

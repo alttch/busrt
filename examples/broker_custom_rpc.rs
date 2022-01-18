@@ -26,7 +26,7 @@ impl RpcHandlers for MyHandlers {
                 let params: PingParams = rmp_serde::from_read_ref(event.payload())?;
                 Ok(params.message.map(|m| m.as_bytes().to_vec()))
             }
-            _ => Err(RpcError::method()),
+            _ => Err(RpcError::method(None)),
         }
     }
     // Handle RPC notifications

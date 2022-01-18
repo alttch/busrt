@@ -46,7 +46,7 @@ impl RpcHandlers for MyHandlers {
                     .fetch_add(params.value, atomic::Ordering::SeqCst);
                 Ok(None)
             }
-            _ => Err(RpcError::method()),
+            _ => Err(RpcError::method(None)),
         }
     }
     // Handle RPC notifications

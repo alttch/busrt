@@ -647,25 +647,25 @@ impl RpcHandlers for BrokerRpcHandlers {
         match event.parse_method()? {
             "test" => {
                 if !params.is_empty() {
-                    return Err(RpcError::params());
+                    return Err(RpcError::params(None));
                 }
                 Ok(Some(RPC_OK.to_vec()))
             }
             "info" => {
                 if !params.is_empty() {
-                    return Err(RpcError::params());
+                    return Err(RpcError::params(None));
                 }
                 Ok(Some(rmp_serde::to_vec_named(&Broker::info())?))
             }
             "stats" => {
                 if !params.is_empty() {
-                    return Err(RpcError::params());
+                    return Err(RpcError::params(None));
                 }
                 Ok(Some(rmp_serde::to_vec_named(&self.db.stats())?))
             }
             "client.list" => {
                 if !params.is_empty() {
-                    return Err(RpcError::params());
+                    return Err(RpcError::params(None));
                 }
                 let db = self.db.clients.read().unwrap();
                 let mut clients: Vec<ClientInfo> = db
@@ -686,7 +686,7 @@ impl RpcHandlers for BrokerRpcHandlers {
                 clients.sort();
                 Ok(Some(rmp_serde::to_vec_named(&ClientList { clients })?))
             }
-            _ => Err(RpcError::method()),
+            _ => Err(RpcError::method(None)),
         }
     }
     async fn handle_notification(&self, _event: RpcEvent) {}

@@ -559,32 +559,43 @@ impl RpcError {
         Self { code, data }
     }
     #[inline]
-    pub fn method() -> Self {
+    pub fn method(err: Option<Vec<u8>>) -> Self {
         Self {
             code: RPC_ERROR_CODE_METHOD_NOT_FOUND,
-            data: None,
+            data: err,
         }
     }
     #[inline]
-    pub fn params() -> Self {
+    pub fn params(err: Option<Vec<u8>>) -> Self {
         Self {
             code: RPC_ERROR_CODE_INVALID_METHOD_PARAMS,
-            data: None,
+            data: err,
         }
     }
     #[inline]
-    pub fn parse() -> Self {
+    pub fn parse(err: Option<Vec<u8>>) -> Self {
         Self {
             code: RPC_ERROR_CODE_PARSE,
-            data: None,
+            data: err,
         }
     }
     #[inline]
-    pub fn invalid() -> Self {
+    pub fn invalid(err: Option<Vec<u8>>) -> Self {
         Self {
             code: RPC_ERROR_CODE_INVALID_REQUEST,
-            data: None,
+            data: err,
         }
+    }
+    #[inline]
+    pub fn internal(err: Option<Vec<u8>>) -> Self {
+        Self {
+            code: RPC_ERROR_CODE_INTERNAL,
+            data: err,
+        }
+    }
+    #[inline]
+    pub fn convert_data(v: impl fmt::Display) -> Vec<u8> {
+        v.to_string().as_bytes().to_vec()
     }
 }
 
