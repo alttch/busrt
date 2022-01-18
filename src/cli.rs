@@ -393,14 +393,14 @@ async fn benchmark_client(
                         .send(&$target, $payload.clone().into(), $qos)
                         .await
                         .unwrap();
-                    if $qos == QoS::Processed {
+                    if $qos.needs_ack() {
                         let _r = result.unwrap().await.unwrap();
                     }
                 }
             }));
         };
     }
-    for q in &[(QoS::No, "no"), (QoS::Processed, "processed")] {
+    for q in &[(QoS::No, "no"), (QoS::RealtimeProcessed, "processed")] {
         let qos = q.0;
         clear!();
         staged_benchmark_start!(&format!("send.qos.{}", q.1));
@@ -412,7 +412,7 @@ async fn benchmark_client(
         }
         bm_finish!(iters, futs);
     }
-    for q in &[(QoS::No, "no"), (QoS::Processed, "processed")] {
+    for q in &[(QoS::No, "no"), (QoS::RealtimeProcessed, "processed")] {
         let qos = q.0;
         clear!();
         staged_benchmark_start!(&format!("send+recv.qos.{}", q.1));
@@ -477,16 +477,16 @@ async fn benchmark_rpc(
                 for _ in 0..iters_worker {
                     if $cr {
                         let result = rpc
-                            .call(&$target, $method, $payload.clone().into())
+                            .call(&$target, $method, $payload.clone().into(), QoS::Realtime)
                             .await
                             .unwrap();
                         assert_eq!(result.payload(), *$payload);
                     } else {
                         let result = rpc
-                            .call0(&$target, $method, $payload.clone().into())
+                            .call0(&$target, $method, $payload.clone().into(), QoS::Realtime)
                             .await
                             .unwrap();
-                        let _r = result.unwrap().await.unwrap();
+                        //let _r = result.unwrap().await.unwrap();
                     }
                 }
             }));
@@ -571,7 +571,7 @@ async fn main() {
                 BrokerCommand::ClientList => {
                     let mut rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc
-                        .call(".broker", "client.list", empty_payload!())
+                        .call(".broker", "client.list", empty_payload!(), QoS::Processed)
                         .await
                         .unwrap();
                     let mut clients: ClientList =
@@ -601,7 +601,7 @@ async fn main() {
                 BrokerCommand::Stats => {
                     let mut rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc
-                        .call(".broker", "stats", empty_payload!())
+                        .call(".broker", "stats", empty_payload!(), QoS::Processed)
                         .await
                         .unwrap();
                     let stats: BrokerStats = rmp_serde::from_read_ref(result.payload()).unwrap();
@@ -615,7 +615,10 @@ async fn main() {
                 }
                 BrokerCommand::Info => {
                     let mut rpc = RpcClient::new(client, DummyHandlers {});
-                    let result = rpc.call(".broker", "info", empty_payload!()).await.unwrap();
+                    let result = rpc
+                        .call(".broker", "info", empty_payload!(), QoS::Processed)
+                        .await
+                        .unwrap();
                     let info: BrokerInfo = rmp_serde::from_read_ref(result.payload()).unwrap();
                     let mut table = ctable(vec!["field", "value"]);
                     table.add_row(row!["author", info.author]);
@@ -624,7 +627,10 @@ async fn main() {
                 }
                 BrokerCommand::Test => {
                     let mut rpc = RpcClient::new(client, DummyHandlers {});
-                    let result = rpc.call(".broker", "test", empty_payload!()).await.unwrap();
+                    let result = rpc
+                        .call(".broker", "test", empty_payload!(), QoS::Processed)
+                        .await
+                        .unwrap();
                     print_payload(result.payload(), opts.silent).await;
                 }
             }
@@ -696,7 +702,7 @@ async fn main() {
                 }
                 RpcCommand::Call0(cmd) => {
                     let (rpc, payload) = prepare_rpc_call!(cmd, client);
-                    rpc.call0(&cmd.target, &cmd.method, payload.into())
+                    rpc.call0(&cmd.target, &cmd.method, payload.into(), QoS::Processed)
                         .await
                         .unwrap()
                         .unwrap()
@@ -708,7 +714,7 @@ async fn main() {
                 RpcCommand::Call(cmd) => {
                     let (mut rpc, payload) = prepare_rpc_call!(cmd, client);
                     let result = rpc
-                        .call(&cmd.target, &cmd.method, payload.into())
+                        .call(&cmd.target, &cmd.method, payload.into(), QoS::Processed)
                         .await
                         .unwrap();
                     print_payload(result.payload(), opts.silent).await;

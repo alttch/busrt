@@ -40,6 +40,20 @@ Crate features
 * **std-alloc** - forcibly use the standard memory allocator for server/cli
   (enable in case of problems with jemalloc)
 
+QoS
+---
+
+All elbus frames have 4 types of QoS:
+
+* No (0) - does not need confirmation, not real-time
+* Processed (1) - needs confirmation from the broker, not real-time
+* Realtime (2) - does not need confirmation, real-time
+* RealtimeProcessed (3) - needs confirmation from the broker, real-time
+
+When real-time frames are send to a socket, its write buffer is flushed
+immediately. Otherwise, a "buf_ttl" delay may occur (>1ms), unless any data is
+sent after and the buffer is flushed automatically.
+
 .. include:: readme.rst
 
 .. toctree::

@@ -23,7 +23,7 @@ use tokio::time;
 
 use crate::{Error, ErrorKind, GREETINGS, PROTOCOL_VERSION};
 
-use crate::comm::TtlBufWriter;
+use crate::comm::{Flush, TtlBufWriter};
 use crate::ERR_DATA;
 use crate::ERR_NOT_SUPPORTED;
 use crate::RESPONSE_OK;
@@ -66,20 +66,19 @@ type BrokerClient = Arc<ElbusClient>;
 
 macro_rules! make_confirm_channel {
     ($qos: expr) => {
-        match $qos {
-            QoS::No => Ok(None),
-            QoS::Processed => {
-                let (tx, rx) = tokio::sync::oneshot::channel();
-                let _r = tx.send(Ok(()));
-                Ok(Some(rx))
-            }
+        if $qos.needs_ack() {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let _r = tx.send(Ok(()));
+            Ok(Some(rx))
+        } else {
+            Ok(None)
         }
     };
 }
 
 macro_rules! send {
     ($db:expr, $client:expr, $target:expr, $header: expr,
-     $buf:expr, $payload_pos:expr, $len: expr) => {{
+     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
@@ -102,6 +101,7 @@ macro_rules! send {
                 header: $header,
                 buf: $buf,
                 payload_pos: $payload_pos,
+                realtime: $realtime,
             });
             tx.send(frame).await.map_err(Into::into)
         } else {
@@ -112,7 +112,7 @@ macro_rules! send {
 
 macro_rules! send_broadcast {
     ($db:expr, $client:expr, $target:expr, $header: expr,
-     $buf:expr, $payload_pos:expr, $len: expr) => {{
+     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
@@ -128,6 +128,7 @@ macro_rules! send_broadcast {
                 header: $header,
                 buf: $buf,
                 payload_pos: $payload_pos,
+                realtime: $realtime,
             });
             $db.w_frames
                 .fetch_add(subs.len() as u64, atomic::Ordering::SeqCst);
@@ -144,7 +145,7 @@ macro_rules! send_broadcast {
 
 macro_rules! publish {
     ($db:expr, $client:expr, $topic:expr, $header: expr,
-     $buf:expr, $payload_pos:expr, $len: expr) => {{
+     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
@@ -160,6 +161,7 @@ macro_rules! publish {
                 header: $header,
                 buf: $buf,
                 payload_pos: $payload_pos,
+                realtime: $realtime,
             });
             $db.w_frames
                 .fetch_add(subs.len() as u64, atomic::Ordering::SeqCst);
@@ -247,7 +249,16 @@ impl AsyncClient for Client {
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
         let len = payload.len() as u64;
-        send!(self.db, self.client, target, None, payload.to_vec(), 0, len)?;
+        send!(
+            self.db,
+            self.client,
+            target,
+            None,
+            payload.to_vec(),
+            0,
+            len,
+            qos.is_realtime()
+        )?;
         make_confirm_channel!(qos)
     }
     #[inline]
@@ -266,7 +277,8 @@ impl AsyncClient for Client {
             Some(header.to_vec()),
             payload.to_vec(),
             0,
-            len
+            len,
+            qos.is_realtime()
         )?;
         make_confirm_channel!(qos)
     }
@@ -278,7 +290,16 @@ impl AsyncClient for Client {
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
         let len = payload.len() as u64;
-        send_broadcast!(self.db, self.client, target, None, payload.to_vec(), 0, len);
+        send_broadcast!(
+            self.db,
+            self.client,
+            target,
+            None,
+            payload.to_vec(),
+            0,
+            len,
+            qos.is_realtime()
+        );
         make_confirm_channel!(qos)
     }
     #[inline]
@@ -289,7 +310,16 @@ impl AsyncClient for Client {
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
         let len = payload.len() as u64;
-        publish!(self.db, self.client, topic, None, payload.to_vec(), 0, len);
+        publish!(
+            self.db,
+            self.client,
+            topic,
+            None,
+            payload.to_vec(),
+            0,
+            len,
+            qos.is_realtime()
+        );
         make_confirm_channel!(qos)
     }
     #[inline]
@@ -958,6 +988,7 @@ impl Broker {
                     rmp_serde::to_vec_named(&params)
                         .map_err(Error::data)?
                         .into(),
+                    QoS::No,
                 )
                 .await?;
                 Ok(())
@@ -995,8 +1026,7 @@ impl Broker {
         let db = params.db;
         macro_rules! write_and_flush {
             ($buf: expr) => {
-                time::timeout(timeout, writer.write_all($buf)).await??;
-                time::timeout(timeout, writer.flush()).await??;
+                time::timeout(timeout, writer.write($buf, Flush::Instant)).await??;
             };
         }
         let mut buf = GREETINGS.to_vec();
@@ -1044,25 +1074,23 @@ impl Broker {
         let writer_fut = tokio::spawn(async move {
             while let Ok(frame) = rx.recv().await {
                 macro_rules! write_data {
-                    ($data: expr) => {
-                        if !$data.is_empty() {
-                            match time::timeout(timeout, writer.write_all($data)).await {
-                                Ok(result) => {
-                                    if let Err(e) = result {
-                                        pretty_error!(w_name, Into::<Error>::into(&e));
-                                        break;
-                                    }
-                                }
-                                Err(_) => {
-                                    error!("client {} error: timeout", w_name);
+                    ($data: expr, $flush: expr) => {
+                        match time::timeout(timeout, writer.write($data, $flush)).await {
+                            Ok(result) => {
+                                if let Err(e) = result {
+                                    pretty_error!(w_name, Into::<Error>::into(&e));
                                     break;
                                 }
+                            }
+                            Err(_) => {
+                                error!("client {} error: timeout", w_name);
+                                break;
                             }
                         }
                     };
                 }
                 if frame.kind == FrameKind::Prepared {
-                    write_data!(&frame.buf);
+                    write_data!(&frame.buf, frame.realtime.into());
                 } else {
                     let sender = frame.sender.as_ref().unwrap().as_bytes();
                     let topic = frame.topic.as_ref().map(String::as_bytes);
@@ -1078,18 +1106,18 @@ impl Broker {
                     let frame_len = extra_len + frame.buf.len() - frame.payload_pos + 1;
                     #[allow(clippy::cast_possible_truncation)]
                     buf.extend_from_slice(&(frame_len as u32).to_le_bytes()); // bytes 1-4
-                    buf.push(0x00); // byte 5 - reserved
+                    buf.push(if frame.realtime { 1 } else { 0 }); // byte 5 - reserved
                     buf.extend_from_slice(sender);
                     buf.push(0x00);
                     if let Some(t) = topic.as_ref() {
                         buf.extend_from_slice(t);
                         buf.push(0x00);
                     };
-                    write_data!(&buf);
+                    write_data!(&buf, Flush::No);
                     if let Some(header) = frame.header() {
-                        write_data!(header);
+                        write_data!(header, Flush::No);
                     }
-                    write_data!(frame.payload());
+                    write_data!(frame.payload(), frame.realtime.into());
                 }
             }
         });
@@ -1127,7 +1155,7 @@ impl Broker {
             let mut buf = vec![0; len as usize];
             time::timeout(timeout, reader.read_exact(&mut buf)).await??;
             macro_rules! send_ack {
-                ($code:expr) => {
+                ($code:expr, $realtime: expr) => {
                     let mut buf = Vec::with_capacity(6);
                     buf.push(OP_ACK);
                     buf.extend_from_slice(op_id);
@@ -1148,6 +1176,7 @@ impl Broker {
                             header: None,
                             buf,
                             payload_pos: 0,
+                            realtime: $realtime,
                         }))
                         .await?;
                 };
@@ -1170,8 +1199,8 @@ impl Broker {
                             trace!("elbus client {} subscribed to topic {}", client, topic);
                         }
                     }
-                    if qos == QoS::Processed {
-                        send_ack!(RESPONSE_OK);
+                    if qos.needs_ack() {
+                        send_ack!(RESPONSE_OK, qos.is_realtime());
                     }
                 }
                 FrameOp::UnsubscribeTopic => {
@@ -1191,8 +1220,8 @@ impl Broker {
                             trace!("elbus client {} unsubscribed from topic {}", client, topic);
                         }
                     }
-                    if qos == QoS::Processed {
-                        send_ack!(RESPONSE_OK);
+                    if qos.needs_ack() {
+                        send_ack!(RESPONSE_OK, qos.is_realtime());
                     }
                 }
                 _ => {
@@ -1205,26 +1234,40 @@ impl Broker {
                     match op {
                         FrameOp::Message => {
                             let len = buf.len() as u64;
-                            if let Err(e) = send!(db, client, target, None, buf, payload_pos, len) {
-                                if qos == QoS::Processed {
-                                    send_ack!(e.kind as u8);
+                            let realtime = qos.is_realtime();
+                            if let Err(e) =
+                                send!(db, client, target, None, buf, payload_pos, len, realtime)
+                            {
+                                if qos.needs_ack() {
+                                    send_ack!(e.kind as u8, realtime);
                                 }
-                            } else if qos == QoS::Processed {
-                                send_ack!(RESPONSE_OK);
+                            } else if qos.needs_ack() {
+                                send_ack!(RESPONSE_OK, realtime);
                             }
                         }
                         FrameOp::Broadcast => {
                             let len = buf.len() as u64;
-                            send_broadcast!(db, client, target, None, buf, payload_pos, len);
-                            if qos == QoS::Processed {
-                                send_ack!(RESPONSE_OK);
+                            let realtime = qos.is_realtime();
+                            send_broadcast!(
+                                db,
+                                client,
+                                target,
+                                None,
+                                buf,
+                                payload_pos,
+                                len,
+                                realtime
+                            );
+                            if qos.needs_ack() {
+                                send_ack!(RESPONSE_OK, realtime);
                             }
                         }
                         FrameOp::PublishTopic => {
                             let len = buf.len() as u64;
-                            publish!(db, client, target, None, buf, payload_pos, len);
-                            if qos == QoS::Processed {
-                                send_ack!(RESPONSE_OK);
+                            let realtime = qos.is_realtime();
+                            publish!(db, client, target, None, buf, payload_pos, len, realtime);
+                            if qos.needs_ack() {
+                                send_ack!(RESPONSE_OK, realtime);
                             }
                         }
                         _ => {}

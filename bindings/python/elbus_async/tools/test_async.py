@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0, '..')
 import asyncio
 import elbus_async
 import threading
@@ -30,7 +32,7 @@ async def test(w, iters):
         for i in range(iters):
             frame = elbus_async.client.Frame(payload,
                                              tp=elbus_async.client.OP_MESSAGE)
-            frame.qos = 0
+            frame.qos = 2
             b = await bus.send('y', frame)
             if not await b.wait_completed(timeout=1):
                 raise TimeoutError

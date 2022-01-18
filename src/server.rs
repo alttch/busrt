@@ -97,9 +97,9 @@ struct Opts {
     #[clap(
         long = "buf-ttl",
         default_value = "1",
-        help = "Write buffer TTL (microseconds)"
+        help = "Write buffer TTL (milliseconds)"
     )]
-    buf_ttl: f64,
+    buf_ttl: u64,
     #[clap(
         long = "queue-size",
         default_value = "8192",
@@ -188,9 +188,7 @@ fn main() {
         }
     }
     let timeout = Duration::from_secs_f64(opts.timeout);
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
-    let buf_ttl = Duration::from_nanos((opts.buf_ttl * 1000.0) as u64);
+    let buf_ttl = Duration::from_millis(opts.buf_ttl);
     info!("starting elbus server");
     info!("workers: {}", opts.workers);
     info!("buf size: {}", opts.buf_size);

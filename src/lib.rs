@@ -33,7 +33,7 @@ pub static AUTHOR: &str = "(c) 2022 Bohemia Automation / Altertech";
 /// When a frame is sent, methods do not wait for the result, but they return OpConfirm type to let
 /// the sender get the result if required.
 ///
-/// When the frame is sent with QoS > 0, the Option contains Receiver<Result>
+/// When the frame is sent with QoS "processed", the Option contains Receiver<Result>
 ///
 /// Example:
 ///
@@ -284,11 +284,24 @@ impl TryFrom<u8> for FrameOp {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 #[repr(u8)]
 pub enum QoS {
     No = 0,
     Processed = 1,
+    Realtime = 2,
+    RealtimeProcessed = 3,
+}
+
+impl QoS {
+    #[inline]
+    pub fn is_realtime(self) -> bool {
+        self as u8 & 0b10 != 0
+    }
+    #[inline]
+    pub fn needs_ack(self) -> bool {
+        self as u8 & 0b1 != 0
+    }
 }
 
 impl TryFrom<u8> for QoS {
@@ -297,6 +310,8 @@ impl TryFrom<u8> for QoS {
         match q {
             0 => Ok(QoS::No),
             1 => Ok(QoS::Processed),
+            2 => Ok(QoS::Realtime),
+            3 => Ok(QoS::RealtimeProcessed),
             _ => Err(Error::data(format!("Invalid QoS: {}", q))),
         }
     }
@@ -335,6 +350,7 @@ pub struct FrameData {
     header: Option<Vec<u8>>, // zero-copy payload prefix
     buf: Vec<u8>,
     payload_pos: usize,
+    realtime: bool,
 }
 
 impl FrameData {
@@ -345,6 +361,7 @@ impl FrameData {
         header: Option<Vec<u8>>,
         buf: Vec<u8>,
         payload_pos: usize,
+        realtime: bool,
     ) -> Self {
         Self {
             kind,
@@ -353,6 +370,7 @@ impl FrameData {
             header,
             buf,
             payload_pos,
+            realtime,
         }
     }
     #[inline]
@@ -384,6 +402,10 @@ impl FrameData {
     /// copy
     pub fn header(&self) -> Option<&[u8]> {
         self.header.as_deref()
+    }
+    #[inline]
+    pub fn is_realtime(&self) -> bool {
+        self.realtime
     }
 }
 

@@ -11,7 +11,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::borrow::Cow;
-use crate::comm::TtlBufWriter;
+use crate::comm::{Flush, TtlBufWriter};
 use crate::Error;
 use crate::EventChannel;
 use crate::IntoElbusResult;
@@ -42,10 +42,10 @@ enum Writer {
 }
 
 impl Writer {
-    pub async fn write_all(&mut self, buf: &[u8]) -> Result<(), Error> {
+    pub async fn write(&mut self, buf: &[u8], flush: Flush) -> Result<(), Error> {
         match self {
-            Writer::Unix(w) => w.write_all(buf).await.map_err(Into::into),
-            Writer::Tcp(w) => w.write_all(buf).await.map_err(Into::into),
+            Writer::Unix(w) => w.write(buf, flush).await.map_err(Into::into),
+            Writer::Tcp(w) => w.write(buf, flush).await.map_err(Into::into),
         }
     }
 }
@@ -112,8 +112,8 @@ macro_rules! prepare_frame_buf {
 }
 
 macro_rules! send_data_or_mark_disconnected {
-    ($self: expr, $data: expr) => {
-        match tokio::time::timeout($self.timeout, $self.writer.write_all($data)).await {
+    ($self: expr, $data: expr, $flush: expr) => {
+        match tokio::time::timeout($self.timeout, $self.writer.write($data, $flush)).await {
             Ok(result) => {
                 if let Err(e) = result {
                     $self.reader_fut.abort();
@@ -130,17 +130,17 @@ macro_rules! send_data_or_mark_disconnected {
 
 macro_rules! send_frame_and_confirm {
     ($self: expr, $buf: expr, $payload: expr, $qos: expr) => {{
-        let rx = if $qos == QoS::No {
-            None
-        } else {
+        let rx = if $qos.needs_ack() {
             let (tx, rx) = oneshot::channel();
             {
                 $self.responses.lock().unwrap().insert($self.frame_id, tx);
             }
             Some(rx)
+        } else {
+            None
         };
-        send_data_or_mark_disconnected!($self, $buf);
-        send_data_or_mark_disconnected!($self, $payload);
+        send_data_or_mark_disconnected!($self, $buf, Flush::No);
+        send_data_or_mark_disconnected!($self, $payload, $qos.is_realtime().into());
         Ok(rx)
     }};
 }
@@ -351,7 +351,7 @@ impl AsyncClient for Client {
     }
     #[inline]
     async fn ping(&mut self) -> Result<(), Error> {
-        send_data_or_mark_disconnected!(self, PING_FRAME);
+        send_data_or_mark_disconnected!(self, PING_FRAME, Flush::Instant);
         Ok(())
     }
     #[inline]
@@ -387,6 +387,7 @@ where
         let mut buf = vec![0; 6];
         reader.read_exact(&mut buf).await?;
         let frame_type: FrameKind = buf[0].try_into()?;
+        let realtime = buf[5] != 0;
         match frame_type {
             FrameKind::Nop => {}
             FrameKind::Acknowledge => {
@@ -428,6 +429,7 @@ where
                     None,
                     buf,
                     payload_pos,
+                    realtime,
                 ));
                 tx.send(frame).await.map_err(Error::io)?;
             }

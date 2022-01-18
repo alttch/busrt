@@ -59,12 +59,12 @@ class Frame {
 class ClientFrame {
   constructor(qos) {
     this.qos = qos;
-    if (qos > 0) {
+    if ((qos & 0b1) != 0) {
       this.lock = new Mutex();
     }
   }
   is_completed() {
-    if (this.qos > 0) {
+    if ((this.qos & 0b1) != 0) {
       return this.result !== undefined;
     } else {
       return true;
@@ -74,7 +74,7 @@ class ClientFrame {
     this.release = await this.lock.acquire();
   }
   async wait_completed() {
-    if (this.qos == 0) {
+    if ((this.qos & 0b1) == 0) {
       return RESPONSE_OK;
     }
     let r = await this.lock.acquire();
@@ -435,7 +435,7 @@ class Client {
       let frame_id = this.frame_id;
       let o = new ClientFrame(frame.qos);
       try {
-        if (frame.qos > 0) {
+        if ((frame.qos & 0b1) != 0) {
           await o.lock_frame();
           this.frames[frame_id] = o;
         }

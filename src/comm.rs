@@ -5,6 +5,24 @@ use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum Flush {
+    No,
+    Scheduled,
+    Instant,
+}
+
+impl From<bool> for Flush {
+    #[inline]
+    fn from(realtime: bool) -> Self {
+        if realtime {
+            Flush::Instant
+        } else {
+            Flush::Scheduled
+        }
+    }
+}
+
 pub struct TtlBufWriter<W> {
     writer: Arc<Mutex<BufWriter<W>>>,
     tx: async_channel::Sender<bool>,
@@ -42,21 +60,21 @@ where
         }
     }
     #[inline]
-    pub async fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
-        let result = self.writer.lock().await.write_all(buf).await;
-        if self.tx.is_empty() {
+    pub async fn write(&mut self, buf: &[u8], flush: Flush) -> std::io::Result<()> {
+        let mut writer = self.writer.lock().await;
+        let result = writer.write_all(buf).await;
+        if flush == Flush::Instant {
+            writer.flush().await?;
+        } else if flush == Flush::Scheduled && self.tx.is_empty() {
             let _ = self.tx.send(true).await;
         }
         result
-    }
-    pub async fn flush(&mut self) -> std::io::Result<()> {
-        self.writer.lock().await.flush().await
     }
 }
 
 impl<W> Drop for TtlBufWriter<W> {
     fn drop(&mut self) {
         self.flusher.abort();
-        self.dtx.take().unwrap().send(true).unwrap();
+        let _ = self.dtx.take().unwrap().send(true);
     }
 }

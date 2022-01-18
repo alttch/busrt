@@ -173,7 +173,7 @@ class Client:
                     self.frame_id = 1
                 frame_id = self.frame_id
                 o = ClientFrame(frame.qos)
-                if frame.qos > 0:
+                if frame.qos & 0b1 != 0:
                     self.frames[frame_id] = o
                 flags = frame.type | frame.qos << 6
                 if frame.type == OP_SUBSCRIBE or frame.type == OP_UNSUBSCRIBE:
@@ -225,17 +225,17 @@ class ClientFrame:
     def __init__(self, qos):
         self.qos = qos
         self.result = 0
-        if qos > 0:
+        if qos & 0b1 != 0:
             self.completed = threading.Event()
 
     def is_completed(self):
-        if self.qos > 0:
+        if self.qos & 0b1 != 0:
             return self.completed.is_set()
         else:
             return True
 
     def wait_completed(self, *args, **kwargs):
-        if self.qos == 0:
+        if self.qos & 0b1 == 0:
             return RESPONSE_OK
         elif not self.completed.wait(*args, **kwargs):
             raise TimeoutError

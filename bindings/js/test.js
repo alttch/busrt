@@ -46,7 +46,7 @@ async function test() {
   var tdqm = ntqdm();
   for (let i of ntqdm(generator(iters), { total: iters, logging: true })) {
     let op = await bus.send("y", msg);
-    //await op.wait_completed();
+    await op.wait_completed();
   }
   let elapsed = new Date().getTime() / 1000 - start;
   let speed = Math.round(iters / elapsed);

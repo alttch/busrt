@@ -31,7 +31,7 @@ def test(w, iters):
         bus.connect()
         print(f'Connected to {path}')
         for i in range(iters):
-            frame = elbus.client.Frame(payload, qos=0)
+            frame = elbus.client.Frame(payload, qos=3)
             b = bus.send('y', frame)
             if not b.wait_completed(timeout=1):
                 raise TimeoutError

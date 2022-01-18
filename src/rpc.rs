@@ -247,6 +247,7 @@ pub trait Rpc {
         target: &str,
         method: &str,
         params: Cow<'async_trait>,
+        qos: QoS,
     ) -> Result<OpConfirm, Error>;
     /// Call the method and get the response
     async fn call(
@@ -254,6 +255,7 @@ pub trait Rpc {
         target: &str,
         method: &str,
         params: Cow<'async_trait>,
+        qos: QoS,
     ) -> Result<RpcEvent, RpcError>;
     fn is_connected(&self) -> bool;
 }
@@ -305,6 +307,11 @@ async fn processor<C, H>(
                         };
                         let h = handlers.clone();
                         tokio::spawn(async move {
+                            let qos = if event.frame().is_realtime() {
+                                QoS::RealtimeProcessed
+                            } else {
+                                QoS::Processed
+                            };
                             let res = h.handle_call(event).await;
                             if let Some((target, cl)) = ev {
                                 macro_rules! send_reply {
@@ -312,21 +319,11 @@ async fn processor<C, H>(
                                         let mut client = cl.lock().await;
                                         if let Some(result) = $result {
                                             client
-                                                .zc_send(
-                                                    &target,
-                                                    $payload,
-                                                    result.into(),
-                                                    QoS::Processed,
-                                                )
+                                                .zc_send(&target, $payload, result.into(), qos)
                                                 .await
                                         } else {
                                             client
-                                                .zc_send(
-                                                    &target,
-                                                    $payload,
-                                                    (&[][..]).into(),
-                                                    QoS::Processed,
-                                                )
+                                                .zc_send(&target, $payload, (&[][..]).into(), qos)
                                                 .await
                                         }
                                     }};
@@ -469,12 +466,13 @@ impl Rpc for RpcClient {
         target: &str,
         method: &str,
         params: Cow<'async_trait>,
+        qos: QoS,
     ) -> Result<OpConfirm, Error> {
         let payload = prepare_call_payload(method, &[0, 0, 0, 0]);
         self.client
             .lock()
             .await
-            .zc_send(target, payload.into(), params, QoS::Processed)
+            .zc_send(target, payload.into(), params, qos)
             .await
     }
     /// # Panics
@@ -485,6 +483,7 @@ impl Rpc for RpcClient {
         target: &str,
         method: &str,
         params: Cow<'async_trait>,
+        qos: QoS,
     ) -> Result<RpcEvent, RpcError> {
         self.increase_call_id();
         let call_id = self.call_id;
@@ -502,20 +501,17 @@ impl Rpc for RpcClient {
                 }
             };
         }
-        {
+        let opc = {
             let mut client = self.client.lock().await;
-            let fut = client.zc_send(target, payload.into(), params, QoS::Processed);
+            let fut = client.zc_send(target, payload.into(), params, qos);
             if let Some(timeout) = self.timeout {
-                unwrap_or_cancel!(unwrap_or_cancel!(
-                    unwrap_or_cancel!(unwrap_or_cancel!(tokio::time::timeout(timeout, fut).await))
-                        .unwrap()
-                        .await
-                ));
+                unwrap_or_cancel!(unwrap_or_cancel!(tokio::time::timeout(timeout, fut).await))
             } else {
-                unwrap_or_cancel!(unwrap_or_cancel!(
-                    unwrap_or_cancel!(fut.await).unwrap().await
-                ));
+                unwrap_or_cancel!(fut.await)
             }
+        };
+        if let Some(c) = opc {
+            unwrap_or_cancel!(unwrap_or_cancel!(c.await));
         }
         let result = rx.await.map_err(Into::<Error>::into)?;
         if let Ok(e) = TryInto::<RpcError>::try_into(&result) {
