@@ -236,7 +236,7 @@ pub trait Rpc {
     /// pub/sub and send broadcast messages)
     fn client(&self) -> Arc<Mutex<(dyn AsyncClient + 'static)>>;
     async fn notify(
-        &mut self,
+        &self,
         target: &str,
         data: Cow<'async_trait>,
         qos: QoS,
@@ -251,7 +251,7 @@ pub trait Rpc {
     ) -> Result<OpConfirm, Error>;
     /// Call the method and get the response
     async fn call(
-        &mut self,
+        &self,
         target: &str,
         method: &str,
         params: Cow<'async_trait>,
@@ -262,7 +262,7 @@ pub trait Rpc {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct RpcClient {
-    call_id: u32,
+    call_id: std::sync::Mutex<u32>,
     timeout: Option<Duration>,
     client: Arc<Mutex<dyn AsyncClient>>,
     processor_fut: Arc<std::sync::Mutex<JoinHandle<()>>>,
@@ -423,21 +423,13 @@ impl RpcClient {
             })
         });
         Self {
-            call_id: 0,
+            call_id: std::sync::Mutex::new(0),
             timeout,
             client,
             processor_fut,
             pinger_fut,
             calls,
             connected,
-        }
-    }
-    #[inline]
-    fn increase_call_id(&mut self) {
-        if self.call_id == u32::MAX {
-            self.call_id = 1;
-        } else {
-            self.call_id += 1;
         }
     }
 }
@@ -450,7 +442,7 @@ impl Rpc for RpcClient {
     }
     #[inline]
     async fn notify(
-        &mut self,
+        &self,
         target: &str,
         data: Cow<'async_trait>,
         qos: QoS,
@@ -479,14 +471,23 @@ impl Rpc for RpcClient {
     ///
     /// Will panic on poisoned mutex
     async fn call(
-        &mut self,
+        &self,
         target: &str,
         method: &str,
         params: Cow<'async_trait>,
         qos: QoS,
     ) -> Result<RpcEvent, RpcError> {
-        self.increase_call_id();
-        let call_id = self.call_id;
+        let call_id = {
+            let mut ci = self.call_id.lock().unwrap();
+            let mut call_id = *ci;
+            if call_id == u32::MAX {
+                call_id = 1;
+            } else {
+                call_id += 1;
+            }
+            *ci = call_id;
+            call_id
+        };
         let payload = prepare_call_payload(method, &call_id.to_le_bytes());
         let (tx, rx) = oneshot::channel();
         self.calls.lock().unwrap().insert(call_id, tx);

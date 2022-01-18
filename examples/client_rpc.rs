@@ -20,7 +20,7 @@ async fn main() {
     let config = Config::new("/tmp/elbus.sock", name);
     let client = Client::connect(&config).await.unwrap();
     // create RPC with no handlers
-    let mut rpc = RpcClient::new(client, DummyHandlers {});
+    let rpc = RpcClient::new(client, DummyHandlers {});
     // call the method with no confirm
     rpc.call0(target, "test", empty_payload!(), QoS::Processed)
         .await

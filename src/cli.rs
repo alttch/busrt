@@ -473,7 +473,7 @@ async fn benchmark_rpc(
     macro_rules! spawn_caller {
         ($rpc: expr, $target: expr, $method: expr, $payload: expr, $cr: expr) => {
             futs.push(tokio::spawn(async move {
-                let mut rpc = $rpc.lock().await;
+                let rpc = $rpc.lock().await;
                 for _ in 0..iters_worker {
                     if $cr {
                         let result = rpc
@@ -579,7 +579,7 @@ async fn main() {
             let client = create_client(&opts, &client_name).await;
             match op {
                 BrokerCommand::ClientList => {
-                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc
                         .call(".broker", "client.list", empty_payload!(), QoS::Processed)
                         .await
@@ -609,7 +609,7 @@ async fn main() {
                     table.printstd();
                 }
                 BrokerCommand::Stats => {
-                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc
                         .call(".broker", "stats", empty_payload!(), QoS::Processed)
                         .await
@@ -624,7 +624,7 @@ async fn main() {
                     table.printstd();
                 }
                 BrokerCommand::Info => {
-                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc
                         .call(".broker", "info", empty_payload!(), QoS::Processed)
                         .await
@@ -636,7 +636,7 @@ async fn main() {
                     table.printstd();
                 }
                 BrokerCommand::Test => {
-                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let rpc = RpcClient::new(client, DummyHandlers {});
                     let result = rpc
                         .call(".broker", "test", empty_payload!(), QoS::Processed)
                         .await
@@ -699,7 +699,7 @@ async fn main() {
                     }
                 }
                 RpcCommand::Notify(cmd) => {
-                    let mut rpc = RpcClient::new(client, DummyHandlers {});
+                    let rpc = RpcClient::new(client, DummyHandlers {});
                     let payload = get_payload(&cmd.payload).await;
                     rpc.notify(&cmd.target, payload.into(), QoS::Processed)
                         .await
@@ -722,7 +722,7 @@ async fn main() {
                     ok!();
                 }
                 RpcCommand::Call(cmd) => {
-                    let (mut rpc, payload) = prepare_rpc_call!(cmd, client);
+                    let (rpc, payload) = prepare_rpc_call!(cmd, client);
                     let result = rpc
                         .call(&cmd.target, &cmd.method, payload.into(), QoS::Processed)
                         .await
