@@ -245,7 +245,7 @@ class ClientFrame:
 
 class Frame:
 
-    def __init__(self, payload=None, tp=OP_MESSAGE, qos=1):
+    def __init__(self, payload=None, tp=OP_MESSAGE, qos=0):
         self.payload = payload
         # used for zero-copy
         self.header = None

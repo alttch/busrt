@@ -48,7 +48,7 @@ class Frame {
     if (qos !== undefined) {
       this.qos = qos;
     } else {
-      this.qos = 1;
+      this.qos = 0;
     }
   }
   get_payload() {
