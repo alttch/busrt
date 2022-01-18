@@ -43,14 +43,14 @@ Crate features
 QoS
 ---
 
-All elbus frames have 4 types of QoS:
+elbus frames have 4 types of QoS:
 
-* No (0) - does not need confirmation, not real-time
-* Processed (1) - needs confirmation from the broker, not real-time
+* No (0) - does not need confirmation, non-real-time
+* Processed (1) - needs confirmation from the broker, non-real-time
 * Realtime (2) - does not need confirmation, real-time
 * RealtimeProcessed (3) - needs confirmation from the broker, real-time
 
-When real-time frames are send to a socket, its write buffer is flushed
+When a real-time frame is send to a socket, its write buffer is flushed
 immediately. Otherwise, a "buf_ttl" delay may occur (>1ms), unless any data is
 sent after and the buffer is flushed automatically.
 
