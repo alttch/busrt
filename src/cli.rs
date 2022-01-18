@@ -400,7 +400,7 @@ async fn benchmark_client(
             }));
         };
     }
-    for q in &[(QoS::No, "no"), (QoS::RealtimeProcessed, "processed")] {
+    for q in &[(QoS::Realtime, "no"), (QoS::RealtimeProcessed, "processed")] {
         let qos = q.0;
         clear!();
         staged_benchmark_start!(&format!("send.qos.{}", q.1));
@@ -477,16 +477,26 @@ async fn benchmark_rpc(
                 for _ in 0..iters_worker {
                     if $cr {
                         let result = rpc
-                            .call(&$target, $method, $payload.clone().into(), QoS::Realtime)
+                            .call(
+                                &$target,
+                                $method,
+                                $payload.clone().into(),
+                                QoS::RealtimeProcessed,
+                            )
                             .await
                             .unwrap();
                         assert_eq!(result.payload(), *$payload);
                     } else {
-                        let _result = rpc
-                            .call0(&$target, $method, $payload.clone().into(), QoS::Realtime)
+                        let result = rpc
+                            .call0(
+                                &$target,
+                                $method,
+                                $payload.clone().into(),
+                                QoS::RealtimeProcessed,
+                            )
                             .await
                             .unwrap();
-                        //let _r = result.unwrap().await.unwrap();
+                        let _r = result.unwrap().await.unwrap();
                     }
                 }
             }));
