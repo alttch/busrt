@@ -482,7 +482,7 @@ async fn benchmark_rpc(
                             .unwrap();
                         assert_eq!(result.payload(), *$payload);
                     } else {
-                        let result = rpc
+                        let _result = rpc
                             .call0(&$target, $method, $payload.clone().into(), QoS::Realtime)
                             .await
                             .unwrap();
