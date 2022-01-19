@@ -25,8 +25,8 @@ impl From<bool> for Flush {
 
 pub struct TtlBufWriter<W> {
     writer: Arc<Mutex<BufWriter<W>>>,
-    tx: async_channel::Sender<bool>,
-    dtx: Option<oneshot::Sender<bool>>,
+    tx: async_channel::Sender<()>,
+    dtx: Option<oneshot::Sender<()>>,
     flusher: JoinHandle<()>,
 }
 
@@ -37,7 +37,7 @@ where
     pub fn new(writer: W, cap: usize, ttl: Duration, timeout: Duration) -> Self {
         let writer = Arc::new(Mutex::new(BufWriter::with_capacity(cap, writer)));
         let wf = writer.clone();
-        let (tx, rx) = async_channel::bounded::<bool>(1);
+        let (tx, rx) = async_channel::bounded::<()>(1);
         // flusher future
         let flusher = tokio::spawn(async move {
             while rx.recv().await.is_ok() {
@@ -69,7 +69,7 @@ where
         if flush == Flush::Instant {
             writer.flush().await?;
         } else if flush == Flush::Scheduled && self.tx.is_empty() {
-            let _ = self.tx.send(true).await;
+            let _ = self.tx.send(()).await;
         }
         result
     }
@@ -78,6 +78,6 @@ where
 impl<W> Drop for TtlBufWriter<W> {
     fn drop(&mut self) {
         self.flusher.abort();
-        let _ = self.dtx.take().unwrap().send(true);
+        let _ = self.dtx.take().unwrap().send(());
     }
 }
