@@ -163,7 +163,7 @@ fn ctable(titles: Vec<&str>) -> prettytable::Table {
 }
 
 #[inline]
-fn decode_msgpack(payload: &[u8]) -> Result<BTreeMap<Value, Value>, rmp_serde::decode::Error> {
+fn decode_msgpack(payload: &[u8]) -> Result<Value, rmp_serde::decode::Error> {
     rmp_serde::from_read_ref(payload)
 }
 
@@ -201,33 +201,35 @@ async fn print_payload(payload: &[u8], silent: bool) {
             return;
         }
     }
-    if let Ok(map) = decode_msgpack(payload) {
+    if let Ok(data) = decode_msgpack(payload) {
         if !silent {
             println!("MSGPACK:");
         }
         if let Ok(s) = if silent {
-            serde_json::to_string(&map)
+            serde_json::to_string(&data)
         } else {
-            serde_json::to_string_pretty(&map)
+            serde_json::to_string_pretty(&data)
         } {
             println!("{}", s);
         } else {
-            for (k, v) in map {
-                println!("{:?}: {}", k, v.to_debug_string().blue());
-            }
+            print_hex(&payload);
         }
     } else if silent {
         let mut stdin = tokio::io::stdout();
         stdin.write_all(payload).await.unwrap();
     } else {
-        let (p, dots) = if payload.len() > 256 {
-            (&payload[..256], "...")
-        } else {
-            #[allow(clippy::redundant_slicing)]
-            (&payload[..], "")
-        };
-        println!("HEX: {}{}", hex::encode(p), dots);
+        print_hex(&payload);
     }
+}
+
+fn print_hex(payload: &[u8]) {
+    let (p, dots) = if payload.len() > 256 {
+        (&payload[..256], "...")
+    } else {
+        #[allow(clippy::redundant_slicing)]
+        (&payload[..], "")
+    };
+    println!("HEX: {}{}", hex::encode(p), dots);
 }
 
 #[inline]
