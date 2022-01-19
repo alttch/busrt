@@ -1,6 +1,6 @@
 #[cfg(feature = "rpc")]
 use crate::common::now_ns;
-use log::{error, info, trace};
+use log::{debug, error, trace};
 #[cfg(feature = "rpc")]
 use serde::{Deserialize, Serialize};
 use std::collections::{hash_map, HashMap};
@@ -1069,7 +1069,7 @@ impl Broker {
             write_and_flush!(&[RESPONSE_OK]);
             (client, rx)
         };
-        info!("elbus client registered: {}", client_name);
+        debug!("elbus client registered: {}", client_name);
         let w_name = client_name.clone();
         let writer_fut = tokio::spawn(async move {
             while let Ok(frame) = rx.recv().await {
@@ -1124,7 +1124,7 @@ impl Broker {
         let result = Self::handle_reader(&db, client.clone(), &mut reader, timeout).await;
         writer_fut.abort();
         db.unregister_client(&client).await;
-        info!("elbus client disconnected: {}", client_name);
+        debug!("elbus client disconnected: {}", client_name);
         result
     }
 
