@@ -530,7 +530,7 @@ async fn benchmark_rpc(
 }
 
 #[allow(clippy::too_many_lines)]
-#[tokio::main]
+#[tokio::main(worker_threads=1)]
 async fn main() {
     let opts = Opts::parse();
     let client_name = opts.name.as_ref().map_or_else(
