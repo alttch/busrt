@@ -560,6 +560,14 @@ impl RpcError {
         Self { code, data }
     }
     #[inline]
+    pub fn code(&self) -> i16 {
+        self.code
+    }
+    #[inline]
+    pub fn data(&self) -> Option<&[u8]> {
+        self.data.as_deref()
+    }
+    #[inline]
     pub fn method(err: Option<Vec<u8>>) -> Self {
         Self {
             code: RPC_ERROR_CODE_METHOD_NOT_FOUND,
