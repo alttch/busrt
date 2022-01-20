@@ -1,6 +1,6 @@
-# Python sync client for elbus
+# Python sync client for ELBUS
 
-The module contains Python sync client for [elbus](https://elbus.bma.ai/)
+The module contains Python sync client for [ELBUS](https://elbus.bma.ai/)
 
 ## Installation
 
@@ -21,7 +21,7 @@ def on_frame(frame):
     print('Frame:', hex(frame.type), frame.sender, frame.topic, frame.payload)
 
 name = 'test.client.python.sync'
-# create new elbus client and connect
+# create new ELBUS client and connect
 bus = elbus.client.Client('/tmp/elbus.sock', name)
 bus.on_frame = on_frame
 bus.connect()
@@ -86,7 +86,7 @@ def on_call(event):
     return msgpack.dumps({'ok': True})
 
 name = 'test.client.python.sync.rpc'
-# create new elbus client and connect
+# create new ELBUS client and connect
 bus = elbus.client.Client('/tmp/elbus.sock', name)
 bus.connect()
 # subscribe to all topics
@@ -109,7 +109,7 @@ import elbus
 import msgpack
 
 name = 'test.client.python.sync.rpc.caller'
-# create new elbus client and connect
+# create new ELBUS client and connect
 bus = elbus.client.Client('/tmp/elbus.sock', name)
 bus.connect()
 # init rpc
