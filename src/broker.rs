@@ -726,7 +726,7 @@ macro_rules! spawn_server {
                 match $listener.accept().await {
                     Ok((stream, addr)) => {
                         trace!(
-                            "elbus tcp client connected from {:?} to {}",
+                            "elbus client connected from {:?} to {}",
                             addr,
                             socket_path
                         );
