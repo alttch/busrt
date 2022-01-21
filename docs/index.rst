@@ -1,12 +1,12 @@
-elbus - Rust-native IPC broker
+ELBUS - Rust-native IPC broker
 ==============================
 
-What is elbus
+What is ELBUS
 -------------
 
-elbus is a rust-native IPC broker, written in Rust/Tokio, inspired by
-`zeromq <https://zeromq.org>`_ and `nanomsg <https://nanomsg.org>`_.
-elbus is fast, flexible and very easy to use.
+ELBUS is a rust-native IPC broker, written in Rust/Tokio, inspired by `zeromq
+<https://zeromq.org>`_ and `nanomsg <https://nanomsg.org>`_. ELBUS is fast,
+flexible and very easy to use.
 
 The library can be embedded in any Rust project or be used as a
 standalone server.
@@ -43,7 +43,7 @@ Crate features
 QoS
 ---
 
-elbus frames have 4 types of QoS:
+ELBUS frames have 4 types of QoS:
 
 * No (0) - does not need confirmation, non-real-time
 * Processed (1) - needs confirmation from the broker, non-real-time

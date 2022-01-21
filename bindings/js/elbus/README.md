@@ -1,6 +1,6 @@
-# javascript client for elbus
+# javascript client for ELBUS
 
-JavaScript client for [elbus](https://elbus.bma.ai/)
+JavaScript client for [ELBUS](https://elbus.bma.ai/)
 
 ## Client example
 

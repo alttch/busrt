@@ -1,6 +1,6 @@
-# Python async client for elbus
+# Python async client for ELBUS
 
-The module contains Python sync client for [elbus](https://elbus.bma.ai/)
+The module contains Python sync client for [ELBUS](https://elbus.bma.ai/)
 
 ## Installation
 
@@ -23,7 +23,7 @@ async def on_frame(frame):
 
 async def main():
     name = 'test.client.python.async'
-    # create new elbus client and connect
+    # create new ELBUS client and connect
     bus = elbus_async.client.Client('/tmp/elbus.sock', name)
     bus.on_frame = on_frame
     await bus.connect()
@@ -95,7 +95,7 @@ async def on_call(event):
 
 async def main():
     name = 'test.client.python.async.rpc'
-    # create new elbus client and connect
+    # create new ELBUS client and connect
     bus = elbus_async.client.Client('/tmp/elbus.sock', name)
     await bus.connect()
     # subscribe to all topics
@@ -123,7 +123,7 @@ import asyncio
 
 async def main():
     name = 'test.client.python.async.rpc.caller'
-    # create new elbus client and connect
+    # create new ELBUS client and connect
     bus = elbus_async.client.Client('/tmp/elbus.sock', name)
     await bus.connect()
     # init rpc

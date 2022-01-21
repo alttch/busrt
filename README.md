@@ -1,21 +1,21 @@
-# elbus - Rust-native IPC broker
+# ELBUS - Rust-native IPC broker
 
 <img src="https://raw.githubusercontent.com/alttch/elbus/main/docs/images/logo-dark.svg"
 width="200" />
 
 <https://elbus.bma.ai/>
 
-## What is elbus
+## What is ELBUS
 
-elbus is a rust-native IPC broker, written in Rust/Tokio, inspired by
-[zeromq](https://zeromq.org) and [nanomsg](https://nanomsg.org). elbus is fast,
+ELBUS is a rust-native IPC broker, written in Rust/Tokio, inspired by
+[zeromq](https://zeromq.org) and [nanomsg](https://nanomsg.org). ELBUS is fast,
 flexible and very easy to use.
 
 The library can be embedded in any Rust project or be used as a standalone
 server.
 
-NOTE: elbus is not officially released yet and SDK can be changed at any time
-without any backward compatibility. elbus (stands actually for "EVA ICS Local
+NOTE: ELBUS is not officially released yet and SDK can be changed at any time
+without any backward compatibility. ELBUS (stands actually for "EVA ICS Local
 Bus") is the key component of [EVA ICS](https://www.eva-ics.com/) v4, which is
 going to be released in 2022-2023.
 
@@ -37,7 +37,7 @@ The following channels are supported:
 * UNIX sockets (local machine)
 * TCP sockets
 
-In addition to Rust, elbus has also bindings for the following languages:
+In addition to Rust, ELBUS has also bindings for the following languages:
 
 * Python (sync): <https://pypi.org/project/elbus/>
 * Python (async): <https://pypi.org/project/elbus-async/>
@@ -76,7 +76,7 @@ communications.
 
 ## Security and reliability model
 
-elbus has ZERO security model in favor of simplicity and speed. Also, elbus is
+ELBUS has ZERO security model in favor of simplicity and speed. Also, ELBUS is
 not designed to work via unstable connections, all clients should be connected
 either from the local machine or using high-speed reliable local network
 communications.
@@ -117,9 +117,9 @@ socket), totals:
 | send.qos.no              | 2\_748\_870 |
 | send.qos.processed       | 183\_795    |
 
-## elbus vs NATS
+## ELBUS vs NATS
 
-According to benchmarks, elbus is usually faster than NATS in typical common
+According to benchmarks, ELBUS is usually faster than NATS in typical common
 tasks (with no QoS), but to avoid holy wars we do not provide any numbers.
 [Please do benchmark by
 yourself](https://gist.github.com/divi255/683ae8e9c0c63e34f49e058aeb536349).
