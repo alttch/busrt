@@ -37,6 +37,7 @@ pub enum RpcEventKind {
     ErrorReply = RPC_ERROR,
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[inline]
 pub fn rpc_err_str(v: impl fmt::Display) -> Option<Vec<u8>> {
     Some(v.to_string().as_bytes().to_vec())
@@ -108,7 +109,8 @@ impl RpcEvent {
     #[inline]
     pub fn method(&self) -> &[u8] {
         if self.use_header {
-            &self.frame().header().unwrap()[5..]
+            let header = self.frame.header.as_ref().unwrap();
+            &header[5..header.len() - 1]
         } else {
             &self.frame().payload()[5..self.payload_pos - 1]
         }
