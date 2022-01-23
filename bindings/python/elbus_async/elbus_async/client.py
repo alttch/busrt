@@ -55,7 +55,8 @@ class Client:
     async def connect(self):
         with await self.mgmt_lock:
             if self.path.endswith('.sock') or self.path.endswith(
-                    '.socket') or self.path.startswith('/'):
+                    '.socket') or self.path.endswith(
+                        '.ipc') or self.path.startswith('/'):
                 reader, writer = await asyncio.open_unix_connection(
                     self.path, limit=self.buf_size)
             else:

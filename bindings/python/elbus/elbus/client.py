@@ -53,7 +53,8 @@ class Client:
     def connect(self):
         with self.mgmt_lock:
             if self.path.endswith('.sock') or self.path.endswith(
-                    '.socket') or self.path.startswith('/'):
+                    '.socket') or self.path.endswith(
+                        '.ipc') or self.path.startswith('/'):
                 self.socket = socket.socket(socket.AF_UNIX)
                 path = self.path
             else:
