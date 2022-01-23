@@ -37,6 +37,11 @@ pub enum RpcEventKind {
     ErrorReply = RPC_ERROR,
 }
 
+#[inline]
+pub fn rpc_err_str(v: impl fmt::Display) -> Option<Vec<u8>> {
+    Some(v.to_string().as_bytes().to_vec())
+}
+
 impl fmt::Display for RpcEventKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
