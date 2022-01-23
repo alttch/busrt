@@ -274,7 +274,7 @@ dependencies = [
 
 [[package]]
 name = "elbus"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "async-channel",
  "async-trait",
