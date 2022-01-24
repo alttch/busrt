@@ -380,7 +380,10 @@ async fn processor<C, H>(
                 }
             }
         } else {
-            handlers.handle_frame(frame).await;
+            let h = handlers.clone();
+            tokio::spawn(async move {
+                h.handle_frame(frame).await;
+            });
         }
     }
 }
