@@ -73,7 +73,7 @@ struct RpcCall {
     target: String,
     #[clap()]
     method: String,
-    #[clap(help = "payload string key=value, empty for stdin payload or '_' for no params")]
+    #[clap(help = "payload string key=value, '-' for stdin payload")]
     params: Vec<String>,
 }
 
@@ -530,7 +530,7 @@ async fn benchmark_rpc(
 }
 
 #[allow(clippy::too_many_lines)]
-#[tokio::main(worker_threads=1)]
+#[tokio::main(worker_threads = 1)]
 async fn main() {
     let opts = Opts::parse();
     let client_name = opts.name.as_ref().map_or_else(
@@ -563,15 +563,13 @@ async fn main() {
     macro_rules! prepare_rpc_call {
         ($c: expr, $client: expr) => {{
             let rpc = RpcClient::new($client, DummyHandlers {});
-            let payload = if $c.params.is_empty() {
+            let payload = if $c.params.len() == 1 && $c.params[0] == "-" {
                 read_stdin().await
+            } else if $c.params.is_empty() {
+                Vec::new()
             } else {
-                if $c.params.len() == 1 && $c.params[0] == "_" {
-                    Vec::new()
-                } else {
-                    let s = $c.params.iter().map(String::as_str).collect::<Vec<&str>>();
-                    rmp_serde::to_vec_named(&elbus::common::str_to_params_map(&s).unwrap()).unwrap()
-                }
+                let s = $c.params.iter().map(String::as_str).collect::<Vec<&str>>();
+                rmp_serde::to_vec_named(&elbus::common::str_to_params_map(&s).unwrap()).unwrap()
             };
             (rpc, payload)
         }};
