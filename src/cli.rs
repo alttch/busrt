@@ -7,7 +7,7 @@ use elbus::common::{BrokerInfo, BrokerStats, ClientList};
 use elbus::ipc::{Client, Config};
 use elbus::rpc::{DummyHandlers, Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::{empty_payload, Error, Frame, QoS};
-use log::info;
+use log::{error, info};
 use num_format::{Locale, ToFormattedString};
 use serde_value::Value;
 use std::collections::BTreeMap;
@@ -723,11 +723,19 @@ async fn main() {
                 }
                 RpcCommand::Call(cmd) => {
                     let (rpc, payload) = prepare_rpc_call!(cmd, client);
-                    let result = rpc
+                    match rpc
                         .call(&cmd.target, &cmd.method, payload.into(), QoS::Processed)
                         .await
-                        .unwrap();
-                    print_payload(result.payload(), opts.silent).await;
+                    {
+                        Ok(result) => print_payload(result.payload(), opts.silent).await,
+                        Err(e) => {
+                            let message = e
+                                .data()
+                                .map_or("", |data| std::str::from_utf8(data).unwrap_or(""));
+                            error!("RPC Error {}: {}", e.code(), message);
+                            std::process::exit(1);
+                        }
+                    }
                 }
             }
         }
