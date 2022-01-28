@@ -72,3 +72,18 @@ sent after and the buffer is flushed automatically.
     Python client (sync) <python/elbus>
     Python client (async) <python/elbus_async>
     Javascript client <https://www.npmjs.com/package/elbus>
+
+Performance tips
+----------------
+
+* Use "Realtime" or "RealtimeProcessed" QoS for the softly-loaded networks to
+  get minimal latencies.
+
+* Use high-capacity queues (both client and server) to deal with short
+  high-load peaks.
+
+* For permanently loaded networks, the opposite strategy is recommended - keep
+  queues as small as possible (256-512 elements), otherwise the broker can be
+  easily flooded with more active clients.
+
+* If large payloads are expected, consider to increase client/server buffers.
