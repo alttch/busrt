@@ -215,8 +215,8 @@ async fn print_payload(payload: &[u8], silent: bool) {
             print_hex(payload);
         }
     } else if silent {
-        let mut stdin = tokio::io::stdout();
-        stdin.write_all(payload).await.unwrap();
+        let mut stdout = tokio::io::stdout();
+        stdout.write_all(payload).await.unwrap();
     } else {
         print_hex(payload);
     }
