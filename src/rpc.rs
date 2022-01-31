@@ -639,6 +639,16 @@ impl From<rmp_serde::encode::Error> for RpcError {
     }
 }
 
+impl From<std::io::Error> for RpcError {
+    #[inline]
+    fn from(e: std::io::Error) -> RpcError {
+        RpcError {
+            code: RPC_ERROR_CODE_INTERNAL,
+            data: Some(e.to_string().as_bytes().to_vec()),
+        }
+    }
+}
+
 impl From<rmp_serde::decode::Error> for RpcError {
     #[inline]
     fn from(e: rmp_serde::decode::Error) -> RpcError {
