@@ -725,11 +725,7 @@ macro_rules! spawn_server {
             loop {
                 match $listener.accept().await {
                     Ok((stream, addr)) => {
-                        trace!(
-                            "elbus client connected from {:?} to {}",
-                            addr,
-                            socket_path
-                        );
+                        trace!("elbus client connected from {:?} to {}", addr, socket_path);
                         if let Err(e) = $prepare(&stream) {
                             error!("{}", e);
                             continue;
