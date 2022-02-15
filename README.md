@@ -8,8 +8,8 @@ width="200" />
 ## What is ELBUS
 
 ELBUS is a rust-native IPC broker, written in Rust/Tokio, inspired by
-[zeromq](https://zeromq.org) and [nanomsg](https://nanomsg.org). ELBUS is fast,
-flexible and very easy to use.
+[NATS](https://nats.io) [ZeroMQ](https://zeromq.org) and
+[NanoMsg](https://nanomsg.org). ELBUS is fast, flexible and very easy to use.
 
 The library can be embedded in any Rust project or be used as a standalone
 server.
@@ -116,13 +116,6 @@ socket), totals:
 | send+recv.qos.processed  | 147\_812    |
 | send.qos.no              | 2\_748\_870 |
 | send.qos.processed       | 183\_795    |
-
-## ELBUS vs NATS
-
-According to benchmarks, ELBUS is usually faster than NATS in typical common
-tasks (with no QoS), but to avoid holy wars we do not provide any numbers.
-[Please do benchmark by
-yourself](https://gist.github.com/divi255/683ae8e9c0c63e34f49e058aeb536349).
 
 ## About the authors
 
