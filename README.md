@@ -8,7 +8,7 @@ width="200" />
 ## What is ELBUS
 
 ELBUS is a rust-native IPC broker, written in Rust/Tokio, inspired by
-[NATS](https://nats.io) [ZeroMQ](https://zeromq.org) and
+[NATS](https://nats.io), [ZeroMQ](https://zeromq.org) and
 [NanoMsg](https://nanomsg.org). ELBUS is fast, flexible and very easy to use.
 
 The library can be embedded in any Rust project or be used as a standalone
