@@ -192,6 +192,9 @@ class RpcCallEvent:
     def get_payload(self):
         return self.frame.payload[5:]
 
+    def is_empty(self):
+        return len(self.frame.payload) <= 5
+
 
 class Event:
 
