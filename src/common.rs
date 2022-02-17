@@ -11,7 +11,7 @@ use std::collections::HashMap;
 #[derive(Eq, PartialEq, Clone)]
 pub struct ClientInfo<'a> {
     pub name: &'a str,
-    pub tp: &'a str,
+    pub kind: &'a str,
     pub source: Option<&'a str>,
     pub port: Option<&'a str>,
     pub r_frames: u64,

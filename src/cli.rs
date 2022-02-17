@@ -595,7 +595,7 @@ async fn main() {
                         if c.name != client_name {
                             table.add_row(row![
                                 c.name,
-                                c.tp,
+                                c.kind,
                                 c.source.unwrap_or_default(),
                                 c.port.unwrap_or_default(),
                                 fnum!(c.r_frames),

@@ -369,19 +369,19 @@ impl Drop for Client {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum ElbusClientType {
+enum ElbusClientKind {
     Internal,
     LocalIpc,
     Tcp,
 }
 
-impl ElbusClientType {
+impl ElbusClientKind {
     #[allow(dead_code)]
     fn as_str(&self) -> &str {
         match self {
-            ElbusClientType::Internal => "internal",
-            ElbusClientType::LocalIpc => "local_ipc",
-            ElbusClientType::Tcp => "tcp",
+            ElbusClientKind::Internal => "internal",
+            ElbusClientKind::LocalIpc => "local_ipc",
+            ElbusClientKind::Tcp => "tcp",
         }
     }
 }
@@ -390,7 +390,7 @@ impl ElbusClientType {
 #[derive(Debug)]
 struct ElbusClient {
     name: String,
-    tp: ElbusClientType,
+    kind: ElbusClientKind,
     source: Option<String>,
     port: Option<String>,
     tx: async_channel::Sender<Frame>,
@@ -411,7 +411,7 @@ impl ElbusClient {
     pub fn new(
         name: &str,
         queue_size: usize,
-        tp: ElbusClientType,
+        kind: ElbusClientKind,
         source: Option<String>,
         port: Option<String>,
     ) -> (Self, EventChannel) {
@@ -419,7 +419,7 @@ impl ElbusClient {
         (
             Self {
                 name: name.to_owned(),
-                tp,
+                kind,
                 source,
                 port,
                 tx,
@@ -673,7 +673,7 @@ impl RpcHandlers for BrokerRpcHandlers {
                     .into_iter()
                     .map(|v| ClientInfo {
                         name: &v.name,
-                        tp: v.tp.as_str(),
+                        kind: v.kind.as_str(),
                         source: v.source.as_deref(),
                         port: v.port.as_deref(),
                         r_frames: v.r_frames.load(atomic::Ordering::SeqCst),
@@ -716,7 +716,7 @@ fn prepare_unix_source(_addr: tokio::net::unix::SocketAddr) -> Option<String> {
 
 macro_rules! spawn_server {
     ($self: expr, $path: expr, $listener: expr, $buf_size: expr,
-     $buf_ttl: expr, $timeout: expr, $tp: expr,
+     $buf_ttl: expr, $timeout: expr, $kind: expr,
      $prepare: ident, $prepare_source: ident) => {{
         let socket_path = $path.to_owned();
         let db = $self.db.clone();
@@ -744,7 +744,7 @@ macro_rules! spawn_server {
                                 writer,
                                 timeout: $timeout,
                                 queue_size,
-                                tp: $tp,
+                                kind: $kind,
                                 source: client_source,
                                 source_port: Some(client_path),
                             })
@@ -772,7 +772,7 @@ where
     writer: TtlBufWriter<W>,
     timeout: Duration,
     queue_size: usize,
-    tp: ElbusClientType,
+    kind: ElbusClientKind,
     source: Option<String>,
     source_port: Option<String>,
 }
@@ -833,7 +833,7 @@ impl Broker {
     }
     pub async fn register_client(&self, name: &str) -> Result<Client, Error> {
         let (c, rx) =
-            ElbusClient::new(name, self.queue_size, ElbusClientType::Internal, None, None);
+            ElbusClient::new(name, self.queue_size, ElbusClientKind::Internal, None, None);
         let client = Arc::new(c);
         self.db.register_client(client.clone()).await?;
         Ok(Client {
@@ -863,7 +863,7 @@ impl Broker {
             buf_size,
             buf_ttl,
             timeout,
-            ElbusClientType::LocalIpc,
+            ElbusClientKind::LocalIpc,
             prepare_unix_stream,
             prepare_unix_source
         );
@@ -884,7 +884,7 @@ impl Broker {
             buf_size,
             buf_ttl,
             timeout,
-            ElbusClientType::Tcp,
+            ElbusClientKind::Tcp,
             prepare_tcp_stream,
             prepare_tcp_source
         );
@@ -1053,7 +1053,7 @@ impl Broker {
             let (c, rx) = ElbusClient::new(
                 &client_name,
                 queue_size,
-                params.tp,
+                params.kind,
                 params.source,
                 params.source_port,
             );
