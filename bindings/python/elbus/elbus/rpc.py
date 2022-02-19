@@ -33,6 +33,16 @@ def on_notification_default(event):
     pass
 
 
+def format_rpc_e_msg(e):
+    if isinstance(e, RpcException):
+        msg = e.rpc_error_payload
+        if isinstance(msg, bytes):
+            msg = msg.decode()
+    else:
+        msg = str(e)
+    return msg
+
+
 class RpcException(Exception):
 
     def __init__(self, msg='', code=RPC_ERROR_CODE_INTERNAL):
@@ -88,8 +98,7 @@ class Rpc:
                     except KeyError:
                         pass
                     err_code = -32000 - code
-                    call_event.error = RpcException(
-                        f'RPC error code {err_code}', code=err_code)
+                    call_event.error = RpcException(f'RPC error', code=err_code)
                     call_event.completed.set()
             except TimeoutError:
                 try:
@@ -146,7 +155,7 @@ class Rpc:
                             reply.header = (
                                 RPC_ERROR_REPLY_HEADER + call_id_b +
                                 code.to_bytes(2, 'little', signed=True))
-                            reply.payload = str(e)
+                            reply.payload = format_rpc_e_msg(e)
                         self.client.send(sender, reply)
                 elif frame.payload[0] == RPC_REPLY or frame.payload[
                         0] == RPC_ERROR:
