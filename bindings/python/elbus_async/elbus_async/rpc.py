@@ -35,12 +35,9 @@ async def on_notification_default(event):
 
 def format_rpc_e_msg(e):
     if isinstance(e, RpcException):
-        msg = e.rpc_error_payload
-        if isinstance(msg, bytes):
-            msg = msg.decode()
-        else:
-            msg = str(e)
-    return msg
+        return e.rpc_error_payload
+    else:
+        return str(e)
 
 
 class RpcException(Exception):
