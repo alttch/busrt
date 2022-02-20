@@ -91,7 +91,8 @@ class Client:
         with await self.mgmt_lock:
             if self.connected:
                 await self._disconnect()
-                raise e
+                import traceback
+                logger.error(traceback.format_exc())
 
     async def _t_pinger(self):
         try:

@@ -91,9 +91,13 @@ class Client:
     def _handle_daemon_exception(self):
         with self.mgmt_lock:
             if self.connected:
-                self.socket.close()
+                try:
+                    self.socket.close()
+                except:
+                    pass
                 self.connected = False
-                raise
+                import traceback
+                logger.error(traceback.format_exc())
 
     def _t_pinger(self):
         try:
