@@ -145,7 +145,7 @@ class Client:
                         self.on_frame(frame)
                     except:
                         import traceback
-                        traceback.print_exc()
+                        logger.error(traceback.format_exc())
         except:
             self._handle_daemon_exception()
 
