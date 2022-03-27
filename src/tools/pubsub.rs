@@ -72,10 +72,20 @@ impl TopicBroker {
         ),
         Error,
     > {
+        let (tx, rx) = async_channel::unbounded();
+        self.register_topic_tx(topic, tx.clone())?;
+        Ok((tx, rx))
+    }
+    /// Process a topic with the pre-defined channel
+    #[inline]
+    pub fn register_topic_tx(
+        &mut self,
+        topic: &str,
+        tx: async_channel::Sender<Publication>,
+    ) -> Result<(), Error> {
         if let Entry::Vacant(o) = self.topics.entry(topic.to_owned()) {
-            let (tx, rx) = async_channel::unbounded();
-            o.insert(tx.clone());
-            Ok((tx, rx))
+            o.insert(tx);
+            Ok(())
         } else {
             Err(Error::busy("topic already registered"))
         }
@@ -92,10 +102,20 @@ impl TopicBroker {
         ),
         Error,
     > {
+        let (tx, rx) = async_channel::unbounded();
+        self.register_prefix_tx(prefix, tx.clone())?;
+        Ok((tx, rx))
+    }
+    /// Process subtopic by prefix with the pre-defined channel
+    #[inline]
+    pub fn register_prefix_tx(
+        &mut self,
+        prefix: &str,
+        tx: async_channel::Sender<Publication>,
+    ) -> Result<(), Error> {
         if let Entry::Vacant(o) = self.prefixes.entry(prefix.to_owned()) {
-            let (tx, rx) = async_channel::unbounded();
-            o.insert(tx.clone());
-            Ok((tx, rx))
+            o.insert(tx);
+            Ok(())
         } else {
             Err(Error::busy("topic prefix already registered"))
         }
