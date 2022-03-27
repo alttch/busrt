@@ -68,8 +68,9 @@ impl TopicBroker {
     pub fn register_topic(
         &mut self,
         topic: &str,
+        channel_size: usize,
     ) -> Result<(PublicationSender, PublicationReceiver), Error> {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(channel_size);
         self.register_topic_tx(topic, tx.clone())?;
         Ok((tx, rx))
     }
@@ -88,8 +89,9 @@ impl TopicBroker {
     pub fn register_prefix(
         &mut self,
         prefix: &str,
+        channel_size: usize,
     ) -> Result<(PublicationSender, PublicationReceiver), Error> {
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(channel_size);
         self.register_prefix_tx(prefix, tx.clone())?;
         Ok((tx, rx))
     }
