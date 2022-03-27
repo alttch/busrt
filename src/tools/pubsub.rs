@@ -2,6 +2,9 @@ use crate::{Error, Frame};
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 
+pub type PublicationSender = async_channel::Sender<Publication>;
+pub type PublicationReceiver = async_channel::Receiver<Publication>;
+
 pub struct Publication {
     subtopic_pos: usize,
     frame: Frame,
@@ -51,8 +54,8 @@ impl Publication {
 /// Processes topics and sends frames to handler channels
 #[derive(Default)]
 pub struct TopicBroker {
-    prefixes: BTreeMap<String, async_channel::Sender<Publication>>,
-    topics: BTreeMap<String, async_channel::Sender<Publication>>,
+    prefixes: BTreeMap<String, PublicationSender>,
+    topics: BTreeMap<String, PublicationSender>,
 }
 
 impl TopicBroker {
@@ -65,24 +68,14 @@ impl TopicBroker {
     pub fn register_topic(
         &mut self,
         topic: &str,
-    ) -> Result<
-        (
-            async_channel::Sender<Publication>,
-            async_channel::Receiver<Publication>,
-        ),
-        Error,
-    > {
+    ) -> Result<(PublicationSender, PublicationReceiver), Error> {
         let (tx, rx) = async_channel::unbounded();
         self.register_topic_tx(topic, tx.clone())?;
         Ok((tx, rx))
     }
     /// Process a topic with the pre-defined channel
     #[inline]
-    pub fn register_topic_tx(
-        &mut self,
-        topic: &str,
-        tx: async_channel::Sender<Publication>,
-    ) -> Result<(), Error> {
+    pub fn register_topic_tx(&mut self, topic: &str, tx: PublicationSender) -> Result<(), Error> {
         if let Entry::Vacant(o) = self.topics.entry(topic.to_owned()) {
             o.insert(tx);
             Ok(())
@@ -95,24 +88,14 @@ impl TopicBroker {
     pub fn register_prefix(
         &mut self,
         prefix: &str,
-    ) -> Result<
-        (
-            async_channel::Sender<Publication>,
-            async_channel::Receiver<Publication>,
-        ),
-        Error,
-    > {
+    ) -> Result<(PublicationSender, PublicationReceiver), Error> {
         let (tx, rx) = async_channel::unbounded();
         self.register_prefix_tx(prefix, tx.clone())?;
         Ok((tx, rx))
     }
     /// Process subtopic by prefix with the pre-defined channel
     #[inline]
-    pub fn register_prefix_tx(
-        &mut self,
-        prefix: &str,
-        tx: async_channel::Sender<Publication>,
-    ) -> Result<(), Error> {
+    pub fn register_prefix_tx(&mut self, prefix: &str, tx: PublicationSender) -> Result<(), Error> {
         if let Entry::Vacant(o) = self.prefixes.entry(prefix.to_owned()) {
             o.insert(tx);
             Ok(())
