@@ -27,6 +27,35 @@ pub const RPC_ERROR_CODE_METHOD_NOT_FOUND: i16 = -32601;
 pub const RPC_ERROR_CODE_INVALID_METHOD_PARAMS: i16 = -32602;
 pub const RPC_ERROR_CODE_INTERNAL: i16 = -32603;
 
+/// By default, RPC frame and notification handlers are launched in background, which allows
+/// non-blocking event processing, however events can be processed in random order
+///
+/// RPC options allow to launch handlers in blocking mode. In this case handlers must process
+/// events as fast as possible (e.g. send them to processing channels) and avoid using any RPC
+/// client functions from inside.
+#[derive(Default, Clone, Debug)]
+pub struct Options {
+    blocking_notifications: bool,
+    blocking_frames: bool,
+}
+
+impl Options {
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+    #[inline]
+    pub fn blocking_notifications(mut self) -> Self {
+        self.blocking_notifications = true;
+        self
+    }
+    #[inline]
+    pub fn blocking_frames(mut self) -> Self {
+        self.blocking_frames = true;
+        self
+    }
+}
+
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(u8)]
@@ -284,6 +313,7 @@ async fn processor<C, H>(
     processor_client: Arc<Mutex<C>>,
     calls: CallMap,
     handlers: Arc<H>,
+    opts: Options,
 ) where
     C: AsyncClient + 'static,
     H: RpcHandlers + Send + Sync + 'static,
@@ -294,10 +324,14 @@ async fn processor<C, H>(
                 Ok(event) => match event.kind() {
                     RpcEventKind::Notification => {
                         trace!("RPC notification from {}", event.frame().sender());
-                        let h = handlers.clone();
-                        tokio::spawn(async move {
-                            h.handle_notification(event).await;
-                        });
+                        if opts.blocking_notifications {
+                            handlers.handle_notification(event).await;
+                        } else {
+                            let h = handlers.clone();
+                            tokio::spawn(async move {
+                                h.handle_notification(event).await;
+                            });
+                        }
                     }
                     RpcEventKind::Request => {
                         let id = event.id();
@@ -379,6 +413,8 @@ async fn processor<C, H>(
                     error!("{}", e);
                 }
             }
+        } else if opts.blocking_frames {
+            handlers.handle_frame(frame).await;
         } else {
             let h = handlers.clone();
             tokio::spawn(async move {
@@ -403,7 +439,24 @@ impl RpcClient {
     /// # Panics
     ///
     /// Should not panic
-    pub fn new<H>(mut client: impl AsyncClient + 'static, handlers: H) -> Self
+    pub fn new<H>(client: impl AsyncClient + 'static, handlers: H) -> Self
+    where
+        H: RpcHandlers + Send + Sync + 'static,
+    {
+        Self::init(client, handlers, Options::default())
+    }
+
+    /// # Panics
+    ///
+    /// Should not panic
+    pub fn create<H>(client: impl AsyncClient + 'static, handlers: H, opts: Options) -> Self
+    where
+        H: RpcHandlers + Send + Sync + 'static,
+    {
+        Self::init(client, handlers, opts)
+    }
+
+    fn init<H>(mut client: impl AsyncClient + 'static, handlers: H, opts: Options) -> Self
     where
         H: RpcHandlers + Send + Sync + 'static,
     {
@@ -417,6 +470,7 @@ impl RpcClient {
             client.clone(),
             calls.clone(),
             Arc::new(handlers),
+            opts,
         ))));
         let pinger_client = client.clone();
         let pfut = processor_fut.clone();

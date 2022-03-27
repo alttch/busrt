@@ -384,22 +384,22 @@ impl FrameData {
     pub fn sender(&self) -> &str {
         self.sender.as_ref().unwrap()
     }
-    #[inline]
     /// Filled for pub/sub communications
-    pub fn topic(&self) -> &Option<String> {
-        &self.topic
-    }
     #[inline]
+    pub fn topic(&self) -> Option<&str> {
+        self.topic.as_deref()
+    }
     /// To keep zero-copy model, frames contain the full incoming buffer + actual payload position.
     /// Use this method to get the actual call payload.
+    #[inline]
     pub fn payload(&self) -> &[u8] {
         &self.buf[self.payload_pos..]
     }
-    #[inline]
     /// The header can be used by certain implementations (e.g. the default RPC layer) to
     /// keep zero-copy model. The header is None for IPC communications, but filled for
     /// inter-thread ones. A custom layer should use/parse the header to avoid unnecessary payload
     /// copy
+    #[inline]
     pub fn header(&self) -> Option<&[u8]> {
         self.header.as_deref()
     }
@@ -411,6 +411,10 @@ impl FrameData {
 
 pub mod borrow;
 pub mod common;
+pub mod tools {
+    #[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]
+    pub mod pubsub;
+}
 
 #[cfg(feature = "broker")]
 pub mod broker;
