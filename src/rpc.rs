@@ -34,8 +34,8 @@ pub const RPC_ERROR_CODE_INTERNAL: i16 = -32603;
 /// events as fast as possible (e.g. send them to processing channels) and avoid using any RPC
 /// client functions from inside.
 ///
-/// WARNING: when handling frames in blocking mode, it is impossible to use the current RPC client,
-/// otherwise the whole RPC gets stuck
+/// WARNING: when handling frames in blocking mode, it is forbidden to use the current RPC client
+/// directly or with any kind of bounded channels, otherwise the RPC client gets stuck!
 #[derive(Default, Clone, Debug)]
 pub struct Options {
     blocking_notifications: bool,
