@@ -33,6 +33,9 @@ pub const RPC_ERROR_CODE_INTERNAL: i16 = -32603;
 /// RPC options allow to launch handlers in blocking mode. In this case handlers must process
 /// events as fast as possible (e.g. send them to processing channels) and avoid using any RPC
 /// client functions from inside.
+///
+/// WARNING: when handling frames in blocking mode, it is impossible to use the current RPC client,
+/// otherwise the whole RPC gets stuck
 #[derive(Default, Clone, Debug)]
 pub struct Options {
     blocking_notifications: bool,
