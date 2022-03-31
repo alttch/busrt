@@ -225,7 +225,7 @@ class Notification:
 class Request:
 
     def __init__(self, method, params=b''):
-        self.payload = params
+        self.payload = b'' if params is None else params
         self.type = OP_MESSAGE
         self.qos = 1
         self.method = method.encode() if isinstance(method, str) else method
