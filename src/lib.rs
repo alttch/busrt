@@ -153,6 +153,13 @@ impl Error {
         }
     }
     #[inline]
+    pub fn not_delivered() -> Self {
+        Self {
+            kind: ErrorKind::NotDelivered,
+            message: None,
+        }
+    }
+    #[inline]
     pub fn timeout() -> Self {
         Self {
             kind: ErrorKind::Timeout,

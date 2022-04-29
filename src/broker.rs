@@ -1,6 +1,6 @@
 #[cfg(feature = "rpc")]
 use crate::common::now_ns;
-use log::{debug, error, trace};
+use log::{debug, error, trace, warn};
 #[cfg(feature = "rpc")]
 use serde::{Deserialize, Serialize};
 use std::collections::{hash_map, HashMap};
@@ -76,6 +76,24 @@ macro_rules! make_confirm_channel {
     };
 }
 
+macro_rules! safe_send_frame {
+    ($db: expr, $tgt: expr, $frame: expr) => {
+        if $tgt.tx.is_full() {
+            if $tgt.kind == ElbusClientKind::Internal {
+                warn!("internal client {} queue is full, blocking", $tgt.name);
+                $tgt.tx.send($frame).await.map_err(Into::into)
+            } else {
+                warn!("client {} queue is full, force unregistering", $tgt.name);
+                $db.unregister_client(&$tgt).await;
+                $tgt.tx.close();
+                Err(Error::not_delivered())
+            }
+        } else {
+            $tgt.tx.send($frame).await.map_err(Into::into)
+        }
+    };
+}
+
 macro_rules! send {
     ($db:expr, $client:expr, $target:expr, $header: expr,
      $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr) => {{
@@ -84,16 +102,16 @@ macro_rules! send {
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         trace!("elbus message from {} to {}", $client, $target);
-        let tx = {
+        let client = {
             $db.clients.read().unwrap().get($target).map(|c| {
                 c.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 c.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
                 $db.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 $db.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-                c.tx.clone()
+                c.clone()
             })
         };
-        if let Some(tx) = tx {
+        if let Some(client) = client {
             let frame = Arc::new(FrameData {
                 kind: FrameKind::Message,
                 sender: Some($client.name.clone()),
@@ -103,7 +121,7 @@ macro_rules! send {
                 payload_pos: $payload_pos,
                 realtime: $realtime,
             });
-            tx.send(frame).await.map_err(Into::into)
+            safe_send_frame!($db, client, frame)
         } else {
             Err(Error::not_registered())
         }
@@ -137,7 +155,7 @@ macro_rules! send_broadcast {
             for sub in subs {
                 sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-                let _r = sub.tx.send(frame.clone()).await;
+                let _r = safe_send_frame!($db, sub, frame.clone());
             }
         }
     }};
@@ -170,7 +188,7 @@ macro_rules! publish {
             for sub in subs {
                 sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-                let _r = sub.tx.send(frame.clone()).await;
+                let _r = safe_send_frame!($db, sub, frame.clone());
             }
         }
     }};
