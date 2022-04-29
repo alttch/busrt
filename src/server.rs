@@ -78,7 +78,7 @@ struct Opts {
     path: Vec<String>,
     #[clap(short = 'P', long = "pid-file")]
     pid_file: Option<String>,
-    #[clap(short = 'v', help = "Verbose logging")]
+    #[clap(long = "verbose", help = "Verbose logging")]
     verbose: bool,
     #[clap(short = 'D')]
     daemonize: bool,
