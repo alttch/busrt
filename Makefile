@@ -8,3 +8,8 @@ test:
 	clippy --features rpc
 	clippy --features cli
 	clippy --features server,rpc
+
+tag:
+	git tag -a v${VERSION} -m v${VERSION}
+	git push origin --tags
+
