@@ -1,5 +1,6 @@
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
 
 pub const OP_NOP: u8 = 0x00;
 pub const OP_PUBLISH: u8 = 0x01;
@@ -23,12 +24,19 @@ pub const ERR_NOT_SUPPORTED: u8 = 0x75;
 pub const ERR_BUSY: u8 = 0x76;
 pub const ERR_NOT_DELIVERED: u8 = 0x77;
 pub const ERR_TIMEOUT: u8 = 0x78;
+pub const ERR_ACCESS: u8 = 0x79;
 
 pub const GREETINGS: [u8; 1] = [0xEB];
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub static AUTHOR: &str = "(c) 2022 Bohemia Automation / Altertech";
+
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(1);
+pub const DEFAULT_BUF_TTL: Duration = Duration::from_micros(10);
+pub const DEFAULT_BUF_SIZE: usize = 8192;
+
+pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 
 /// When a frame is sent, methods do not wait for the result, but they return OpConfirm type to let
 /// the sender get the result if required.
@@ -62,6 +70,7 @@ pub enum ErrorKind {
     Data = ERR_DATA,
     Busy = ERR_BUSY,
     NotDelivered = ERR_NOT_DELIVERED,
+    Access = ERR_ACCESS,
     Other = ERR_OTHER,
     Eof = 0xff,
 }
@@ -75,6 +84,7 @@ impl From<u8> for ErrorKind {
             ERR_DATA => ErrorKind::Data,
             ERR_BUSY => ErrorKind::Busy,
             ERR_NOT_DELIVERED => ErrorKind::NotDelivered,
+            ERR_ACCESS => ErrorKind::Access,
             _ => ErrorKind::Other,
         }
     }
@@ -94,6 +104,7 @@ impl fmt::Display for ErrorKind {
                 ErrorKind::Busy => "Busy",
                 ErrorKind::NotDelivered => "Frame not delivered",
                 ErrorKind::Other => "Error",
+                ErrorKind::Access => "Access denied",
                 ErrorKind::Eof => "Eof",
             }
         )
@@ -135,6 +146,13 @@ impl Error {
     pub fn data(e: impl fmt::Display) -> Self {
         Self {
             kind: ErrorKind::Data,
+            message: Some(e.to_string()),
+        }
+    }
+    #[inline]
+    pub fn access(e: impl fmt::Display) -> Self {
+        Self {
+            kind: ErrorKind::Access,
             message: Some(e.to_string()),
         }
     }

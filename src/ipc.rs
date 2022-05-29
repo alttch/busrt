@@ -29,11 +29,6 @@ use log::{error, trace, warn};
 
 use async_trait::async_trait;
 
-pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(1);
-pub const DEFAULT_BUF_TTL: Duration = Duration::from_micros(10);
-pub const DEFAULT_BUF_SIZE: usize = 8192;
-pub const DEFAULT_QUEUE_SIZE: usize = 8192;
-
 type ResponseMap = Arc<Mutex<BTreeMap<u32, oneshot::Sender<Result<(), Error>>>>>;
 
 enum Writer {
@@ -67,10 +62,10 @@ impl Config {
         Self {
             path: path.to_owned(),
             name: name.to_owned(),
-            buf_size: DEFAULT_BUF_SIZE,
-            buf_ttl: DEFAULT_BUF_TTL,
-            queue_size: DEFAULT_QUEUE_SIZE,
-            timeout: DEFAULT_TIMEOUT,
+            buf_size: crate::DEFAULT_BUF_SIZE,
+            buf_ttl: crate::DEFAULT_BUF_TTL,
+            queue_size: crate::DEFAULT_QUEUE_SIZE,
+            timeout: crate::DEFAULT_TIMEOUT,
         }
     }
     pub fn buf_size(mut self, size: usize) -> Self {

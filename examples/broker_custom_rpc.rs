@@ -1,6 +1,6 @@
 /// Demo of custom broker internal RPC
 use async_trait::async_trait;
-use elbus::broker::{Broker, BROKER_NAME};
+use elbus::broker::{Broker, ServerConfig, BROKER_NAME};
 use elbus::client::AsyncClient;
 use elbus::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use elbus::{Frame, QoS};
@@ -55,12 +55,7 @@ async fn main() {
     let mut broker = Broker::new();
     // spawn unix server for external clients
     broker
-        .spawn_unix_server(
-            "/tmp/elbus.sock",
-            8192,
-            Duration::from_micros(1),
-            Duration::from_secs(5),
-        )
+        .spawn_unix_server("/tmp/elbus.sock", ServerConfig::default())
         .await
         .unwrap();
     // register the broker core client

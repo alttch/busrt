@@ -1,12 +1,26 @@
+use crate::borrow::Cow;
+use crate::client::AsyncClient;
+use crate::comm::{Flush, TtlBufWriter};
 #[cfg(feature = "rpc")]
 use crate::common::now_ns;
+use crate::common::{BrokerInfo, BrokerStats};
+#[cfg(feature = "rpc")]
+use crate::common::{ClientInfo, ClientList};
+use crate::{Error, ErrorKind, GREETINGS, PROTOCOL_VERSION};
+use crate::{EventChannel, OpConfirm};
+use crate::{Frame, FrameData, FrameKind, FrameOp, QoS};
+use crate::{ERR_ACCESS, ERR_DATA, ERR_NOT_SUPPORTED};
+use crate::{OP_ACK, RESPONSE_OK};
+use async_trait::async_trait;
+use ipnetwork::IpNetwork;
 use log::{debug, error, trace, warn};
 #[cfg(feature = "rpc")]
 use serde::{Deserialize, Serialize};
-use std::collections::{hash_map, HashMap};
+use std::collections::{hash_map, HashMap, HashSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::Unpin;
+use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::sync::atomic;
 use std::sync::Arc;
@@ -21,29 +35,10 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 
-use crate::{Error, ErrorKind, GREETINGS, PROTOCOL_VERSION};
-
-use crate::comm::{Flush, TtlBufWriter};
-use crate::ERR_DATA;
-use crate::ERR_NOT_SUPPORTED;
-use crate::RESPONSE_OK;
-
-use crate::OP_ACK;
-
-use crate::borrow::Cow;
-use crate::client::AsyncClient;
-use crate::common::{BrokerInfo, BrokerStats};
-#[cfg(feature = "rpc")]
-use crate::common::{ClientInfo, ClientList};
-use crate::{EventChannel, OpConfirm};
-use crate::{Frame, FrameData, FrameKind, FrameOp, QoS};
-
 #[cfg(feature = "rpc")]
 use crate::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 #[cfg(feature = "rpc")]
 use serde_value::Value;
-
-use async_trait::async_trait;
 
 pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 
@@ -411,6 +406,7 @@ struct ElbusClient {
     kind: ElbusClientKind,
     source: Option<String>,
     port: Option<String>,
+    disconnect_trig: triggered::Trigger,
     tx: async_channel::Sender<Frame>,
     registered: atomic::AtomicBool,
     r_frames: atomic::AtomicU64,
@@ -432,14 +428,16 @@ impl ElbusClient {
         kind: ElbusClientKind,
         source: Option<String>,
         port: Option<String>,
-    ) -> (Self, EventChannel) {
+    ) -> (Self, EventChannel, triggered::Listener) {
         let (tx, rx) = async_channel::bounded(queue_size);
+        let (disconnect_trig, disconnect_listener) = triggered::trigger();
         (
             Self {
                 name: name.to_owned(),
                 kind,
                 source,
                 port,
+                disconnect_trig,
                 tx,
                 registered: atomic::AtomicBool::new(false),
                 r_frames: atomic::AtomicU64::new(0),
@@ -448,6 +446,7 @@ impl ElbusClient {
                 w_bytes: atomic::AtomicU64::new(0),
             },
             rx,
+            disconnect_listener,
         )
     }
 }
@@ -614,6 +613,18 @@ impl BrokerDb {
         }
         Ok(())
     }
+    fn trigger_disconnect(&self, name: &str) -> Result<(), Error> {
+        if let Some(client) = self.clients.read().unwrap().get(name) {
+            if client.kind == ElbusClientKind::Internal {
+                Err(Error::not_supported("the client is internal"))
+            } else {
+                client.disconnect_trig.trigger();
+                Ok(())
+            }
+        } else {
+            Err(Error::not_registered())
+        }
+    }
     #[inline]
     async fn unregister_client(&self, client: &Arc<ElbusClient>) {
         self.drop_client(client);
@@ -634,6 +645,121 @@ impl BrokerDb {
         self.clients.write().unwrap().remove(&client.name);
     }
 }
+
+pub type AaaMap = Arc<std::sync::Mutex<HashMap<String, ClientAaa>>>;
+
+#[derive(Debug, Clone)]
+pub struct ServerConfig {
+    buf_size: usize,
+    buf_ttl: Duration,
+    timeout: Duration,
+    aaa_map: Option<AaaMap>,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            buf_size: crate::DEFAULT_BUF_SIZE,
+            buf_ttl: crate::DEFAULT_BUF_TTL,
+            timeout: crate::DEFAULT_TIMEOUT,
+            aaa_map: None,
+        }
+    }
+}
+
+impl ServerConfig {
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+    #[inline]
+    pub fn buf_size(mut self, size: usize) -> Self {
+        self.buf_size = size;
+        self
+    }
+    #[inline]
+    pub fn buf_ttl(mut self, ttl: Duration) -> Self {
+        self.buf_ttl = ttl;
+        self
+    }
+    #[inline]
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+    #[inline]
+    pub fn aaa_map(mut self, aaa_map: AaaMap) -> Self {
+        self.aaa_map.replace(aaa_map);
+        self
+    }
+}
+
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone)]
+pub struct ClientAaa {
+    hosts_allow: HashSet<IpNetwork>,
+    allow_p2p_to: HashSet<String>,
+    allow_p2p_any: bool,
+    allow_publish_any: bool,
+    allow_subscribe_any: bool,
+    allow_broadcast_any: bool,
+}
+
+impl Default for ClientAaa {
+    fn default() -> Self {
+        let mut hosts_allow = HashSet::new();
+        hosts_allow.insert(IpNetwork::V4("0.0.0.0/0".parse().unwrap()));
+        Self {
+            hosts_allow,
+            allow_p2p_to: HashSet::new(),
+            allow_p2p_any: true,
+            allow_publish_any: true,
+            allow_subscribe_any: true,
+            allow_broadcast_any: true,
+        }
+    }
+}
+
+impl ClientAaa {
+    #[inline]
+    pub fn new() -> Self {
+        Self::default()
+    }
+    #[inline]
+    pub fn hosts_allow(mut self, hosts: Vec<IpNetwork>) -> Self {
+        self.hosts_allow = hosts.iter().copied().collect();
+        self
+    }
+    #[inline]
+    pub fn allow_p2p_to(mut self, peers: Vec<&str>) -> Self {
+        self.allow_p2p_to = peers.iter().map(|&v| v.to_owned()).collect();
+        self.allow_p2p_any = self.allow_p2p_to.contains("*");
+        self
+    }
+    #[inline]
+    pub fn deny_publish(mut self) -> Self {
+        self.allow_publish_any = false;
+        self
+    }
+    pub fn deny_subscribe(mut self) -> Self {
+        self.allow_subscribe_any = false;
+        self
+    }
+    #[inline]
+    pub fn deny_broadcast(mut self) -> Self {
+        self.allow_broadcast_any = false;
+        self
+    }
+    fn connect_allowed(&self, addr: IpAddr) -> bool {
+        for h in &self.hosts_allow {
+            if h.contains(addr) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 pub struct Broker {
     db: Arc<BrokerDb>,
     services: Vec<JoinHandle<()>>,
@@ -723,19 +849,18 @@ fn prepare_tcp_stream(stream: &TcpStream) -> Result<(), Error> {
 }
 
 #[allow(clippy::unnecessary_wraps)]
-fn prepare_tcp_source(addr: SocketAddr) -> Option<String> {
+fn prepare_tcp_source(addr: &SocketAddr) -> Option<String> {
     Some(addr.to_string())
 }
 
 #[allow(clippy::unnecessary_wraps)]
-fn prepare_unix_source(_addr: tokio::net::unix::SocketAddr) -> Option<String> {
+fn prepare_unix_source(_addr: &tokio::net::unix::SocketAddr) -> Option<String> {
     None
 }
 
 macro_rules! spawn_server {
-    ($self: expr, $path: expr, $listener: expr, $buf_size: expr,
-     $buf_ttl: expr, $timeout: expr, $kind: expr,
-     $prepare: ident, $prepare_source: ident) => {{
+    ($self: expr, $path: expr, $listener: expr, $config: expr,
+     $kind: expr, $prepare: ident, $prepare_source: ident) => {{
         let socket_path = $path.to_owned();
         let db = $self.db.clone();
         let queue_size = $self.queue_size;
@@ -749,18 +874,26 @@ macro_rules! spawn_server {
                             continue;
                         }
                         let (reader, writer) = stream.into_split();
-                        let reader = BufReader::with_capacity($buf_size, reader);
-                        let writer = TtlBufWriter::new(writer, $buf_size, $buf_ttl, $timeout);
+                        let reader = BufReader::with_capacity($config.buf_size, reader);
+                        let writer = TtlBufWriter::new(
+                            writer,
+                            $config.buf_size,
+                            $config.buf_ttl,
+                            $config.timeout,
+                        );
                         let cdb = db.clone();
                         let name = socket_path.clone();
-                        let client_source = $prepare_source(addr);
+                        let client_source = $prepare_source(&addr);
                         let client_path = socket_path.clone();
+                        let aaa_map = $config.aaa_map.clone();
                         tokio::spawn(async move {
                             if let Err(e) = Self::handle_peer(PeerHandlerParams {
                                 db: cdb,
                                 reader,
                                 writer,
-                                timeout: $timeout,
+                                timeout: $config.timeout,
+                                aaa_map,
+                                ip: addr.into(),
                                 queue_size,
                                 kind: $kind,
                                 source: client_source,
@@ -789,10 +922,29 @@ where
     reader: R,
     writer: TtlBufWriter<W>,
     timeout: Duration,
+    aaa_map: Option<AaaMap>,
+    ip: ClientIp,
     queue_size: usize,
     kind: ElbusClientKind,
     source: Option<String>,
     source_port: Option<String>,
+}
+
+enum ClientIp {
+    No,
+    Addr(IpAddr),
+}
+
+impl From<tokio::net::unix::SocketAddr> for ClientIp {
+    fn from(_addr: tokio::net::unix::SocketAddr) -> Self {
+        Self::No
+    }
+}
+
+impl From<std::net::SocketAddr> for ClientIp {
+    fn from(addr: std::net::SocketAddr) -> Self {
+        Self::Addr(addr.ip())
+    }
 }
 
 impl Default for Broker {
@@ -850,7 +1002,7 @@ impl Broker {
         self.db.announce(event).await
     }
     pub async fn register_client(&self, name: &str) -> Result<Client, Error> {
-        let (c, rx) =
+        let (c, rx, _) =
             ElbusClient::new(name, self.queue_size, ElbusClientKind::Internal, None, None);
         let client = Arc::new(c);
         self.db.register_client(client.clone()).await?;
@@ -865,12 +1017,20 @@ impl Broker {
     pub async fn unregister_client(&self, client: &Client) {
         self.db.unregister_client(&client.client).await;
     }
+    #[inline]
+    /// Force disconnect a client
+    ///
+    /// Errors
+    ///
+    /// NotSupported - if attempted to disconnect an internal client
+    /// NotRegistered - if a client is not registered (may be usually safely omitted)
+    pub fn force_disconnect(&self, name: &str) -> Result<(), Error> {
+        self.db.trigger_disconnect(name)
+    }
     pub async fn spawn_unix_server(
         &mut self,
         path: &str,
-        buf_size: usize,
-        buf_ttl: Duration,
-        timeout: Duration,
+        config: ServerConfig,
     ) -> Result<(), Error> {
         let _r = tokio::fs::remove_file(path).await;
         let listener = UnixListener::bind(path)?;
@@ -878,9 +1038,7 @@ impl Broker {
             self,
             path,
             listener,
-            buf_size,
-            buf_ttl,
-            timeout,
+            config,
             ElbusClientKind::LocalIpc,
             prepare_unix_stream,
             prepare_unix_source
@@ -890,18 +1048,14 @@ impl Broker {
     pub async fn spawn_tcp_server(
         &mut self,
         path: &str,
-        buf_size: usize,
-        buf_ttl: Duration,
-        timeout: Duration,
+        config: ServerConfig,
     ) -> Result<(), Error> {
         let listener = TcpListener::bind(path).await?;
         spawn_server!(
             self,
             path,
             listener,
-            buf_size,
-            buf_ttl,
-            timeout,
+            config,
             ElbusClientKind::Tcp,
             prepare_tcp_stream,
             prepare_tcp_source
@@ -1065,10 +1219,33 @@ impl Broker {
         let client_name = std::str::from_utf8(&buf)?.to_owned();
         if client_name.is_empty() || client_name.starts_with('.') {
             write_and_flush!(&[ERR_DATA]);
-            return Err(Error::data("Invalid client name"));
+            return Err(Error::data(format!("Invalid client name: {}", client_name)));
         }
-        let (client, rx) = {
-            let (c, rx) = ElbusClient::new(
+        let aaa = if let Some(aaa_map) = params.aaa_map {
+            let aaa = aaa_map.lock().unwrap().get(&client_name).cloned();
+            if let Some(ref a) = aaa {
+                if let ClientIp::Addr(addr) = params.ip {
+                    if !a.connect_allowed(addr) {
+                        write_and_flush!(&[ERR_ACCESS]);
+                        return Err(Error::access(format!(
+                            "Client not in AAA map: {}",
+                            client_name
+                        )));
+                    }
+                }
+            } else {
+                write_and_flush!(&[ERR_ACCESS]);
+                return Err(Error::access(format!(
+                    "Client not in AAA map: {}",
+                    client_name
+                )));
+            }
+            aaa
+        } else {
+            None
+        };
+        let (client, rx, disconnect_listener) = {
+            let (c, rx, disconnect_listener) = ElbusClient::new(
                 &client_name,
                 queue_size,
                 params.kind,
@@ -1081,7 +1258,7 @@ impl Broker {
                 return Err(e);
             }
             write_and_flush!(&[RESPONSE_OK]);
-            (client, rx)
+            (client, rx, disconnect_listener)
         };
         debug!("elbus client registered: {}", client_name);
         let w_name = client_name.clone();
@@ -1135,11 +1312,25 @@ impl Broker {
                 }
             }
         });
-        let result = Self::handle_reader(&db, client.clone(), &mut reader, timeout).await;
-        writer_fut.abort();
-        db.unregister_client(&client).await;
-        debug!("elbus client disconnected: {}", client_name);
-        result
+        let reader_fut = Self::handle_reader(&db, client.clone(), &mut reader, timeout, aaa);
+        macro_rules! finish_peer {
+            () => {
+                writer_fut.abort();
+                db.unregister_client(&client).await;
+                debug!("elbus client disconnected: {}", client_name);
+            };
+        }
+        tokio::select! {
+            result = reader_fut => {
+                finish_peer!();
+                result
+            }
+            _ = disconnect_listener => {
+                debug!("disconnected by the broker: {}", client_name);
+                finish_peer!();
+                Ok(())
+            }
+        }
     }
 
     // TODO send ack only after the client received message (QoS2)
@@ -1149,6 +1340,7 @@ impl Broker {
         client: Arc<ElbusClient>,
         reader: &mut R,
         timeout: Duration,
+        aaa: Option<ClientAaa>,
     ) -> Result<(), Error>
     where
         R: AsyncReadExt + Unpin,
@@ -1205,16 +1397,25 @@ impl Broker {
                     db.r_bytes
                         .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
                     let sp = buf.split(|c| *c == 0);
-                    {
-                        let mut sdb = db.subscriptions.write().unwrap();
-                        for t in sp {
-                            let topic = std::str::from_utf8(t)?;
-                            sdb.subscribe(topic, &client);
-                            trace!("elbus client {} subscribed to topic {}", client, topic);
+                    let allowed = if let Some(ref aaa) = aaa {
+                        aaa.allow_subscribe_any
+                    } else {
+                        true
+                    };
+                    if allowed {
+                        {
+                            let mut sdb = db.subscriptions.write().unwrap();
+                            for t in sp {
+                                let topic = std::str::from_utf8(t)?;
+                                sdb.subscribe(topic, &client);
+                                trace!("elbus client {} subscribed to topic {}", client, topic);
+                            }
                         }
-                    }
-                    if qos.needs_ack() {
-                        send_ack!(RESPONSE_OK, qos.is_realtime());
+                        if qos.needs_ack() {
+                            send_ack!(RESPONSE_OK, qos.is_realtime());
+                        }
+                    } else if qos.needs_ack() {
+                        send_ack!(ERR_ACCESS, qos.is_realtime());
                     }
                 }
                 FrameOp::UnsubscribeTopic => {
@@ -1249,39 +1450,66 @@ impl Broker {
                         FrameOp::Message => {
                             let len = buf.len() as u64;
                             let realtime = qos.is_realtime();
-                            if let Err(e) =
-                                send!(db, client, target, None, buf, payload_pos, len, realtime)
-                            {
-                                if qos.needs_ack() {
-                                    send_ack!(e.kind as u8, realtime);
+                            let allowed = if let Some(ref aaa) = aaa {
+                                aaa.allow_p2p_any || aaa.allow_p2p_to.contains(target)
+                            } else {
+                                true
+                            };
+                            if allowed {
+                                if let Err(e) =
+                                    send!(db, client, target, None, buf, payload_pos, len, realtime)
+                                {
+                                    if qos.needs_ack() {
+                                        send_ack!(e.kind as u8, realtime);
+                                    }
+                                } else if qos.needs_ack() {
+                                    send_ack!(RESPONSE_OK, realtime);
                                 }
                             } else if qos.needs_ack() {
-                                send_ack!(RESPONSE_OK, realtime);
+                                send_ack!(ERR_ACCESS, qos.is_realtime());
                             }
                         }
                         FrameOp::Broadcast => {
-                            let len = buf.len() as u64;
-                            let realtime = qos.is_realtime();
-                            send_broadcast!(
-                                db,
-                                client,
-                                target,
-                                None,
-                                buf,
-                                payload_pos,
-                                len,
-                                realtime
-                            );
-                            if qos.needs_ack() {
-                                send_ack!(RESPONSE_OK, realtime);
+                            let allowed = if let Some(ref aaa) = aaa {
+                                aaa.allow_broadcast_any
+                            } else {
+                                true
+                            };
+                            if allowed {
+                                let len = buf.len() as u64;
+                                let realtime = qos.is_realtime();
+                                send_broadcast!(
+                                    db,
+                                    client,
+                                    target,
+                                    None,
+                                    buf,
+                                    payload_pos,
+                                    len,
+                                    realtime
+                                );
+                                if qos.needs_ack() {
+                                    send_ack!(RESPONSE_OK, realtime);
+                                }
+                            } else if qos.needs_ack() {
+                                send_ack!(ERR_ACCESS, qos.is_realtime());
                             }
                         }
                         FrameOp::PublishTopic => {
-                            let len = buf.len() as u64;
-                            let realtime = qos.is_realtime();
-                            publish!(db, client, target, None, buf, payload_pos, len, realtime);
-                            if qos.needs_ack() {
-                                send_ack!(RESPONSE_OK, realtime);
+                            let allowed = if let Some(ref aaa) = aaa {
+                                aaa.allow_publish_any
+                            } else {
+                                true
+                            };
+                            if allowed {
+                                let len = buf.len() as u64;
+                                let realtime = qos.is_realtime();
+                                publish!(db, client, target, None, buf, payload_pos, len, realtime);
+                                if qos.needs_ack() {
+                                    send_ack!(RESPONSE_OK, realtime);
+                                }
+                            } else if qos.needs_ack() {
+                                send_ack!(ERR_ACCESS, qos.is_realtime());
                             }
                         }
                         _ => {}

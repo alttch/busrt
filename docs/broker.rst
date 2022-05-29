@@ -47,3 +47,37 @@ Example of a broker with inter-thread communications and external clients:
 
 .. literalinclude:: ../examples/inter_thread.rs
     :language: rust
+
+Security model
+--------------
+
+An optional simple security model can be implemented in an embedded broker.
+Note that any security model may slowdown communications, so it is usually good
+idea to move semi-trusted clients to a dedicated broker.
+
+When a model is applied, only clients with the names listed in AAA map can
+connect. The clients can be restricted to:
+
+* connect only from specified hosts/networks
+
+* exchange p2p messages with a specified list of peers only
+
+* denied to publish
+
+* denied to subscribe
+
+* denied to broadcast
+
+Important things to know:
+
+* *elbus::broker::AaaMap* is a mutex-protected HashMap, which can be modified
+  on-the-flow
+
+* when a client is connected, its AAA settings are CLONED and not affected with
+  any modifications, so it is usually a good idea to call
+  *Broker::force_disconnect* method when AAA settings are altered or removed
+
+Example:
+
+.. literalinclude:: ../examples/broker_aaa.rs
+    :language: rust

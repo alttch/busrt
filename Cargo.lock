@@ -287,6 +287,7 @@ dependencies = [
  "fork",
  "hex",
  "hostname",
+ "ipnetwork",
  "jemallocator",
  "lazy_static",
  "log",
@@ -301,6 +302,7 @@ dependencies = [
  "syslog",
  "tokio",
  "tokio-timerfd",
+ "triggered",
  "unix-named-pipe",
 ]
 
@@ -452,6 +454,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "ipnetwork"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f84f1612606f3753f205a4e9a2efd6fe5b4c573a6269b2cc6c3003d44a0d127"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1027,6 +1038,12 @@ dependencies = [
  "timerfd",
  "tokio",
 ]
+
+[[package]]
+name = "triggered"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce148eae0d1a376c1b94ae651fc3261d9cb8294788b962b7382066376503a2d1"
 
 [[package]]
 name = "unicode-width"

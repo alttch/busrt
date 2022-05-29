@@ -43,11 +43,14 @@ serde-value = { version = "0.7.0", optional = true }
 atty = { version = "0.2", optional = true }
 tokio-timerfd = { version = "0.2.0", optional = true }
 nix = { version = "0.22.1", optional = true }
+ipnetwork = { version = "0.19.0", optional = true }
+triggered = { version = "0.1.2", optional = true }
 
 [features]
 server = ["log", "syslog", "chrono", "colored", "clap",
           "lazy_static", "jemallocator", "fork", "broker"]
-broker = ["log", "submap", "async-trait", "unix-named-pipe", "nix", "tokio-timerfd"]
+broker = ["log", "submap", "async-trait", "unix-named-pipe", "nix", "tokio-timerfd",
+          "ipnetwork", "triggered"]
 ipc = ["log", "async-trait", "tokio-timerfd"]
 rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value"]
 cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark",
@@ -76,6 +79,10 @@ required-features = ["broker", "rpc"]
 
 [[example]]
 name = "broker_custom_rpc"
+required-features = ["broker", "rpc"]
+
+[[example]]
+name = "broker_aaa"
 required-features = ["broker", "rpc"]
 
 [[example]]

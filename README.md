@@ -76,10 +76,10 @@ communications.
 
 ## Security and reliability model
 
-ELBUS has ZERO security model in favor of simplicity and speed. Also, ELBUS is
-not designed to work via unstable connections, all clients should be connected
-either from the local machine or using high-speed reliable local network
-communications.
+ELBUS has a very simple optional security model in favor of simplicity and
+speed. Also, ELBUS is not designed to work via unstable connections, all
+clients should be connected either from the local machine or using high-speed
+reliable local network communications.
 
 If you need a pub/sub server for a wide area network, try
 [PSRT](https://github.com/alttch/psrt/).
