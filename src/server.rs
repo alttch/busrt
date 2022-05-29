@@ -160,6 +160,7 @@ macro_rules! handle_term_signal {
     };
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     let opts: Opts = Opts::parse();
     if opts.verbose {
