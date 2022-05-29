@@ -19,7 +19,7 @@ use tokio::time::sleep;
 #[cfg(feature = "rpc")]
 use elbus::broker::BrokerEvent;
 
-use elbus::broker::Broker;
+use elbus::broker::{Broker, ServerConfig};
 
 static SERVER_ACTIVE: atomic::AtomicBool = atomic::AtomicBool::new(true);
 
@@ -233,21 +233,27 @@ fn main() {
                         .expect("unable to start fifo server");
                     sock_files.push(_fifo.to_owned());
                 }
-            } else if path.ends_with(".sock")
-                || path.ends_with(".socket")
-                || path.ends_with(".ipc")
-                || path.starts_with('/')
-            {
-                broker
-                    .spawn_unix_server(&path, opts.buf_size, buf_ttl, timeout)
-                    .await
-                    .expect("Unable to start unix server");
-                sock_files.push(path);
             } else {
-                broker
-                    .spawn_tcp_server(&path, opts.buf_size, buf_ttl, timeout)
-                    .await
-                    .expect("Unable to start tcp server");
+                let server_config = ServerConfig::new()
+                    .buf_size(opts.buf_size)
+                    .buf_ttl(buf_ttl)
+                    .timeout(timeout);
+                if path.ends_with(".sock")
+                    || path.ends_with(".socket")
+                    || path.ends_with(".ipc")
+                    || path.starts_with('/')
+                {
+                    broker
+                        .spawn_unix_server(&path, server_config)
+                        .await
+                        .expect("Unable to start unix server");
+                    sock_files.push(path);
+                } else {
+                    broker
+                        .spawn_tcp_server(&path, server_config)
+                        .await
+                        .expect("Unable to start tcp server");
+                }
             }
         }
         drop(sock_files);
