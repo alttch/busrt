@@ -1228,8 +1228,8 @@ impl Broker {
                     if !a.connect_allowed(addr) {
                         write_and_flush!(&[ERR_ACCESS]);
                         return Err(Error::access(format!(
-                            "Client not in AAA map: {}",
-                            client_name
+                            "Client {} is not allowed to connect from {}",
+                            client_name, addr
                         )));
                     }
                 }
