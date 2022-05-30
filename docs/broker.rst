@@ -52,8 +52,9 @@ Security model
 --------------
 
 An optional simple security model can be implemented in an embedded broker.
-Note that any security model may slowdown communications, so it is usually good
-idea to move semi-trusted clients to a dedicated broker.
+Note that any security model may slowdown communications, so it is usually a
+good idea to move semi-trusted clients to a dedicated server socket, as a
+broker can have multiple ones.
 
 When a model is applied, only clients with the names listed in AAA map can
 connect. The clients can be restricted to:
