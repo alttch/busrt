@@ -32,7 +32,7 @@ async fn main() {
             ClientAaa::new()
                 .deny_publish()
                 .deny_broadcast()
-                .allow_p2p_to(vec!["test"]),
+                .allow_p2p_to(&["test"]),
         );
     }
     // put AAA map to the server config

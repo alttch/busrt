@@ -731,7 +731,7 @@ impl ClientAaa {
         self
     }
     #[inline]
-    pub fn allow_p2p_to(mut self, peers: Vec<&str>) -> Self {
+    pub fn allow_p2p_to(mut self, peers: &[&str]) -> Self {
         self.allow_p2p_to = peers.iter().map(|&v| v.to_owned()).collect();
         self.allow_p2p_any = self.allow_p2p_to.contains("*");
         self
