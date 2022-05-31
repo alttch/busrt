@@ -19,24 +19,31 @@ async fn main() {
     // create a new broker instance
     let mut broker = Broker::new();
     broker.init_default_core_rpc().await.unwrap();
-    // spawn unix server for external clients
+    // create AAA map
     let aaa_map = AaaMap::default();
-    aaa_map.lock().unwrap().insert(
-        "test".to_owned(),
-        ClientAaa::new().hosts_allow(vec![IpNetwork::V4("127.0.0.0/8".parse().unwrap())]),
-    );
-    aaa_map.lock().unwrap().insert(
-        "test2".to_owned(),
-        ClientAaa::new()
-            .deny_publish()
-            .deny_broadcast()
-            .allow_p2p_to(vec!["test"]),
-    );
+    {
+        let mut map = aaa_map.lock().unwrap();
+        map.insert(
+            "test".to_owned(),
+            ClientAaa::new().hosts_allow(vec![IpNetwork::V4("127.0.0.0/8".parse().unwrap())]),
+        );
+        map.insert(
+            "test2".to_owned(),
+            ClientAaa::new()
+                .deny_publish()
+                .deny_broadcast()
+                .allow_p2p_to(vec!["test"]),
+        );
+    }
+    // put AAA map to the server config
     let config = ServerConfig::new().aaa_map(aaa_map);
+    // spawn tcp server for external clients
     broker
         .spawn_tcp_server("0.0.0.0:7777", config)
         .await
         .unwrap();
+    // the map can be modified later at any time, however access controls are cached for clients
+    // which are already connected
     loop {
         sleep(Duration::from_secs(5)).await;
         println!("forcing test2 disconnect");
