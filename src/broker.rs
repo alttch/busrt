@@ -27,7 +27,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
-use submap::{BroadcastMap, SubMap};
+use submap::{AclMap, BroadcastMap, SubMap};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream, UnixListener, UnixStream};
 #[cfg(feature = "rpc")]
@@ -698,10 +698,13 @@ impl ServerConfig {
 #[derive(Debug, Clone)]
 pub struct ClientAaa {
     hosts_allow: HashSet<IpNetwork>,
-    allow_p2p_to: HashSet<String>,
+    allow_p2p_to: AclMap,
     allow_p2p_any: bool,
+    allow_publish_to: AclMap,
     allow_publish_any: bool,
+    allow_subscribe_to: AclMap,
     allow_subscribe_any: bool,
+    allow_broadcast_to: AclMap,
     allow_broadcast_any: bool,
 }
 
@@ -711,10 +714,13 @@ impl Default for ClientAaa {
         hosts_allow.insert(IpNetwork::V4("0.0.0.0/0".parse().unwrap()));
         Self {
             hosts_allow,
-            allow_p2p_to: HashSet::new(),
+            allow_p2p_to: AclMap::new().separator('.').wildcard("*").match_any("?"),
             allow_p2p_any: true,
+            allow_publish_to: AclMap::new().separator('/').wildcard("#").match_any("+"),
             allow_publish_any: true,
+            allow_subscribe_to: AclMap::new().separator('/').wildcard("#").match_any("+"),
             allow_subscribe_any: true,
+            allow_broadcast_to: AclMap::new().separator('.').wildcard("*").match_any("?"),
             allow_broadcast_any: true,
         }
     }
@@ -730,26 +736,99 @@ impl ClientAaa {
         self.hosts_allow = hosts.iter().copied().collect();
         self
     }
+    /// peer masks as
+    ///
+    /// group.?.*
+    /// group.subgroup.client
+    /// group.?.client
+    /// group.*
     #[inline]
-    pub fn allow_p2p_to(mut self, peers: &[&str]) -> Self {
-        self.allow_p2p_to = peers.iter().map(|&v| v.to_owned()).collect();
-        self.allow_p2p_any = self.allow_p2p_to.contains("*");
+    pub fn allow_p2p_to(mut self, peer_masks: &[&str]) -> Self {
+        self.allow_p2p_any = false;
+        for peer_mask in peer_masks {
+            if *peer_mask == "*" {
+                self.allow_p2p_any = true;
+            }
+            self.allow_p2p_to.insert(peer_mask);
+        }
+        self
+    }
+    #[inline]
+    pub fn deny_p2p(mut self) -> Self {
+        self.allow_p2p_any = false;
+        self.allow_p2p_to = AclMap::new();
+        self
+    }
+    /// topic masks as
+    ///
+    /// topic/+/#
+    /// topic/subtopic/subsubtopic
+    /// topic/+/subtopic
+    /// topic/#
+    #[inline]
+    pub fn allow_publish_to(mut self, topic_masks: &[&str]) -> Self {
+        self.allow_publish_any = false;
+        for topic_mask in topic_masks {
+            if *topic_mask == "#" {
+                self.allow_publish_any = true;
+            }
+            self.allow_publish_to.insert(topic_mask);
+        }
         self
     }
     #[inline]
     pub fn deny_publish(mut self) -> Self {
         self.allow_publish_any = false;
+        self.allow_publish_to = AclMap::new();
         self
     }
+    /// topic masks as
+    ///
+    /// topic/+/#
+    /// topic/subtopic/subsubtopic
+    /// topic/+/subtopic
+    /// topic/#
+    #[inline]
+    pub fn allow_subscribe_to(mut self, topic_masks: &[&str]) -> Self {
+        self.allow_subscribe_any = false;
+        for topic_mask in topic_masks {
+            if *topic_mask == "#" {
+                self.allow_subscribe_any = true;
+            }
+            self.allow_subscribe_to.insert(topic_mask);
+        }
+        self
+    }
+    #[inline]
     pub fn deny_subscribe(mut self) -> Self {
         self.allow_subscribe_any = false;
+        self.allow_subscribe_to = AclMap::new();
+        self
+    }
+    /// peer masks as
+    ///
+    /// group.?.*
+    /// group.subgroup.client
+    /// group.?.client
+    /// group.*
+    #[inline]
+    pub fn allow_broadcast_to(mut self, peer_masks: &[&str]) -> Self {
+        self.allow_broadcast_any = false;
+        for peer_mask in peer_masks {
+            if *peer_mask == "*" {
+                self.allow_broadcast_any = true;
+            }
+            self.allow_broadcast_to.insert(peer_mask);
+        }
         self
     }
     #[inline]
     pub fn deny_broadcast(mut self) -> Self {
         self.allow_broadcast_any = false;
+        self.allow_broadcast_to = AclMap::new();
         self
     }
+    #[inline]
     fn connect_allowed(&self, addr: IpAddr) -> bool {
         for h in &self.hosts_allow {
             if h.contains(addr) {
@@ -1397,25 +1476,27 @@ impl Broker {
                     db.r_bytes
                         .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
                     let sp = buf.split(|c| *c == 0);
-                    let allowed = if let Some(ref aaa) = aaa {
-                        aaa.allow_subscribe_any
-                    } else {
-                        true
-                    };
-                    if allowed {
-                        {
-                            let mut sdb = db.subscriptions.write().unwrap();
-                            for t in sp {
-                                let topic = std::str::from_utf8(t)?;
-                                sdb.subscribe(topic, &client);
-                                trace!("elbus client {} subscribed to topic {}", client, topic);
-                            }
+                    let mut topics = Vec::new();
+                    for t in sp {
+                        let topic = std::str::from_utf8(t)?;
+                        let allowed = if let Some(ref aaa) = aaa {
+                            aaa.allow_subscribe_any || aaa.allow_subscribe_to.matches(topic)
+                        } else {
+                            true
+                        };
+                        if allowed {
+                            topics.push(topic);
                         }
-                        if qos.needs_ack() {
-                            send_ack!(RESPONSE_OK, qos.is_realtime());
+                    }
+                    {
+                        let mut sdb = db.subscriptions.write().unwrap();
+                        for t in topics {
+                            sdb.subscribe(t, &client);
+                            trace!("elbus client {} subscribed to topic {}", client, t);
                         }
-                    } else if qos.needs_ack() {
-                        send_ack!(ERR_ACCESS, qos.is_realtime());
+                    }
+                    if qos.needs_ack() {
+                        send_ack!(RESPONSE_OK, qos.is_realtime());
                     }
                 }
                 FrameOp::UnsubscribeTopic => {
@@ -1451,7 +1532,7 @@ impl Broker {
                             let len = buf.len() as u64;
                             let realtime = qos.is_realtime();
                             let allowed = if let Some(ref aaa) = aaa {
-                                aaa.allow_p2p_any || aaa.allow_p2p_to.contains(target)
+                                aaa.allow_p2p_any || aaa.allow_p2p_to.matches(target)
                             } else {
                                 true
                             };
@@ -1471,7 +1552,7 @@ impl Broker {
                         }
                         FrameOp::Broadcast => {
                             let allowed = if let Some(ref aaa) = aaa {
-                                aaa.allow_broadcast_any
+                                aaa.allow_broadcast_any || aaa.allow_broadcast_to.matches(target)
                             } else {
                                 true
                             };
@@ -1497,7 +1578,7 @@ impl Broker {
                         }
                         FrameOp::PublishTopic => {
                             let allowed = if let Some(ref aaa) = aaa {
-                                aaa.allow_publish_any
+                                aaa.allow_publish_any || aaa.allow_publish_to.matches(target)
                             } else {
                                 true
                             };

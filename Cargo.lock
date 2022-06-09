@@ -913,9 +913,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "submap"
-version = "0.1.2"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e77d57b2f9331738b1db8f8dbb58d9174d33c7939e93ca1e65a3d33b92c0af6"
+checksum = "f9b576785f97f6213fef7e63c2aa63c81b0df69f674ebfad1a37552ae8d61194"
 
 [[package]]
 name = "syn"
