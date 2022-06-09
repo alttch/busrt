@@ -1486,6 +1486,11 @@ impl Broker {
                         };
                         if allowed {
                             topics.push(topic);
+                        } else if qos.needs_ack() {
+                            send_ack!(ERR_ACCESS, qos.is_realtime());
+                            continue;
+                        } else {
+                            continue;
                         }
                     }
                     {

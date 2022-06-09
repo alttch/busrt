@@ -6,7 +6,7 @@
 ///
 /// test is allowed to do anything
 ///
-/// test2 is allowed to send direct messages to "test" only and subscribe to any topic
+/// test2 is allowed to send direct messages to "test" only and publish to subtopics of "news"
 ///
 /// The broker force-disconnects the client named "test2" every 5 seconds
 use elbus::broker::{AaaMap, Broker, ClientAaa, ServerConfig};
@@ -30,7 +30,8 @@ async fn main() {
         map.insert(
             "test2".to_owned(),
             ClientAaa::new()
-                .deny_publish()
+                .allow_publish_to(&["news/#"])
+                .deny_subscribe()
                 .deny_broadcast()
                 .allow_p2p_to(&["test"]),
         );
