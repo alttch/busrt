@@ -1,6 +1,8 @@
 Broker
 ******
 
+.. contents::
+
 The broker is the central elbus instance, which routes messages between
 applications. Being the broker is the only way to exchange messages between
 local threads, so usually the broker is embedded into the central heaviest

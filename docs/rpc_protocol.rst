@@ -1,5 +1,7 @@
-elbus RPC layer specification
+ELBUS RPC layer specification
 *****************************
+
+.. contents::
 
 A client can send and receive notifications, incoming calls and replies.
 

@@ -1,5 +1,5 @@
-Broker secondary clients and blocking RPC
-*****************************************
+Secondary clients and blocking RPC
+**********************************
 
 .. contents::
 
@@ -107,3 +107,10 @@ client object:
 
 The secondary client is disconnected automatically if the primary one is
 disconnected or dropped.
+
+Creating secondary clients in other languages
+---------------------------------------------
+
+Other language bindings do not support secondary clients out-of-the-box, but
+they can be easily created manually: create a new client with a name
+"NAME%%SFX" where SFX - a counter or a random value.
