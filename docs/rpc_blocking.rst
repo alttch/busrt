@@ -3,7 +3,7 @@ Secondary clients and blocking RPC
 
 .. contents::
 
-When used in blocking mode, RPC executes frame handler in the primary frame
+When used in blocking mode, RPC executes frame handlers in the primary frame
 processing loop and waits until its completed.
 
 This guarantees correct ordering of event processing and is highly recommended
@@ -26,11 +26,10 @@ Why? Let us explain:
 * To keep ordering, RPC layer blocks frame processing until the handler
   executing is over
 
-* The handler calls RPC method and... is getting stuck. The reply can not be
-  received as the RPC layer is blocked and waiting until the handler finishes
-  its task
+* The handler calls RPC method and... gets stuck. The reply can not be received
+  as the RPC layer is blocked and waits until the handler finishes its task
 
-* As the result, the while RPC layer is blocked and IPC communication from/to
+* As the result, the whole RPC layer is blocked and IPC communication from/to
   the process is no longer possible
 
 Solutions
