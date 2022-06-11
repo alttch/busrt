@@ -379,6 +379,7 @@ pub struct FrameData {
 }
 
 impl FrameData {
+    #[inline]
     pub fn new(
         kind: FrameKind,
         sender: Option<String>,
@@ -396,6 +397,18 @@ impl FrameData {
             buf,
             payload_pos,
             realtime,
+        }
+    }
+    #[inline]
+    pub fn new_nop() -> Self {
+        Self {
+            kind: FrameKind::Nop,
+            sender: None,
+            topic: None,
+            header: None,
+            buf: Vec::new(),
+            payload_pos: 0,
+            realtime: false,
         }
     }
     #[inline]

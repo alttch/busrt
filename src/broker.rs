@@ -72,11 +72,21 @@ macro_rules! make_confirm_channel {
 }
 
 macro_rules! safe_send_frame {
-    ($db: expr, $tgt: expr, $frame: expr) => {
+    ($db: expr, $tgt: expr, $frame: expr, $timeout: expr) => {
         if $tgt.tx.is_full() {
             if $tgt.kind == ElbusClientKind::Internal {
-                warn!("internal client {} queue is full, blocking", $tgt.name);
-                $tgt.tx.send($frame).await.map_err(Into::into)
+                if let Some(timeout) = $timeout {
+                    warn!(
+                        "internal client {} queue is full, blocking for {:?}",
+                        $tgt.name, timeout
+                    );
+                    time::timeout(timeout, $tgt.tx.send($frame))
+                        .await?
+                        .map_err(Into::into)
+                } else {
+                    warn!("internal client {} queue is full, blocking", $tgt.name);
+                    $tgt.tx.send($frame).await.map_err(Into::into)
+                }
             } else {
                 warn!("client {} queue is full, force unregistering", $tgt.name);
                 $db.unregister_client(&$tgt).await;
@@ -91,7 +101,7 @@ macro_rules! safe_send_frame {
 
 macro_rules! send {
     ($db:expr, $client:expr, $target:expr, $header: expr,
-     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr) => {{
+     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr, $timeout: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
@@ -116,7 +126,7 @@ macro_rules! send {
                 payload_pos: $payload_pos,
                 realtime: $realtime,
             });
-            safe_send_frame!($db, client, frame)
+            safe_send_frame!($db, client, frame, $timeout)
         } else {
             Err(Error::not_registered())
         }
@@ -125,7 +135,7 @@ macro_rules! send {
 
 macro_rules! send_broadcast {
     ($db:expr, $client:expr, $target:expr, $header: expr,
-     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr) => {{
+     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr, $timeout: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
@@ -150,7 +160,7 @@ macro_rules! send_broadcast {
             for sub in subs {
                 sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-                let _r = safe_send_frame!($db, sub, frame.clone());
+                let _r = safe_send_frame!($db, sub, frame.clone(), $timeout);
             }
         }
     }};
@@ -158,7 +168,7 @@ macro_rules! send_broadcast {
 
 macro_rules! publish {
     ($db:expr, $client:expr, $topic:expr, $header: expr,
-     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr) => {{
+     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr, $timeout: expr) => {{
         $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
@@ -183,7 +193,7 @@ macro_rules! publish {
             for sub in subs {
                 sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
                 sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-                let _r = safe_send_frame!($db, sub, frame.clone());
+                let _r = safe_send_frame!($db, sub, frame.clone(), $timeout);
             }
         }
     }};
@@ -270,7 +280,8 @@ impl AsyncClient for Client {
             payload.to_vec(),
             0,
             len,
-            qos.is_realtime()
+            qos.is_realtime(),
+            self.get_timeout()
         )?;
         make_confirm_channel!(qos)
     }
@@ -291,7 +302,8 @@ impl AsyncClient for Client {
             payload.to_vec(),
             0,
             len,
-            qos.is_realtime()
+            qos.is_realtime(),
+            self.get_timeout()
         )?;
         make_confirm_channel!(qos)
     }
@@ -311,7 +323,8 @@ impl AsyncClient for Client {
             payload.to_vec(),
             0,
             len,
-            qos.is_realtime()
+            qos.is_realtime(),
+            self.get_timeout()
         );
         make_confirm_channel!(qos)
     }
@@ -331,7 +344,8 @@ impl AsyncClient for Client {
             payload.to_vec(),
             0,
             len,
-            qos.is_realtime()
+            qos.is_realtime(),
+            self.get_timeout()
         );
         make_confirm_channel!(qos)
     }
@@ -1340,61 +1354,11 @@ impl Broker {
             (client, rx, disconnect_listener)
         };
         debug!("elbus client registered: {}", client_name);
-        let w_name = client_name.clone();
-        let writer_fut = tokio::spawn(async move {
-            while let Ok(frame) = rx.recv().await {
-                macro_rules! write_data {
-                    ($data: expr, $flush: expr) => {
-                        match time::timeout(timeout, writer.write($data, $flush)).await {
-                            Ok(result) => {
-                                if let Err(e) = result {
-                                    pretty_error!(w_name, Into::<Error>::into(&e));
-                                    break;
-                                }
-                            }
-                            Err(_) => {
-                                error!("client {} error: timeout", w_name);
-                                break;
-                            }
-                        }
-                    };
-                }
-                if frame.kind == FrameKind::Prepared {
-                    write_data!(&frame.buf, frame.realtime.into());
-                } else {
-                    let sender = frame.sender.as_ref().unwrap().as_bytes();
-                    let topic = frame.topic.as_ref().map(String::as_bytes);
-                    let mut extra_len = sender.len();
-                    if let Some(t) = topic.as_ref() {
-                        extra_len += t.len() + 1;
-                    }
-                    if let Some(header) = frame.header.as_ref() {
-                        extra_len += header.len();
-                    }
-                    let mut buf = Vec::with_capacity(7 + extra_len);
-                    buf.push(frame.kind as u8); // byte 0
-                    let frame_len = extra_len + frame.buf.len() - frame.payload_pos + 1;
-                    #[allow(clippy::cast_possible_truncation)]
-                    buf.extend_from_slice(&(frame_len as u32).to_le_bytes()); // bytes 1-4
-                    buf.push(if frame.realtime { 1 } else { 0 }); // byte 5 - reserved
-                    buf.extend_from_slice(sender);
-                    buf.push(0x00);
-                    if let Some(t) = topic.as_ref() {
-                        buf.extend_from_slice(t);
-                        buf.push(0x00);
-                    };
-                    write_data!(&buf, Flush::No);
-                    if let Some(header) = frame.header() {
-                        write_data!(header, Flush::No);
-                    }
-                    write_data!(frame.payload(), frame.realtime.into());
-                }
-            }
-        });
+        let pinger_fut = Self::handle_pinger(&client_name, client.tx.clone(), timeout);
         let reader_fut = Self::handle_reader(&db, client.clone(), &mut reader, timeout, aaa);
+        let writer_fut = Self::handle_writer(rx, &mut writer, timeout);
         macro_rules! finish_peer {
             () => {
-                writer_fut.abort();
                 db.unregister_client(&client).await;
                 debug!("elbus client disconnected: {}", client_name);
             };
@@ -1404,11 +1368,34 @@ impl Broker {
                 finish_peer!();
                 result
             }
+            result = writer_fut => {
+                finish_peer!();
+                result
+            }
+            result = pinger_fut => {
+                finish_peer!();
+                result
+            }
             _ = disconnect_listener => {
                 debug!("disconnected by the broker: {}", client_name);
                 finish_peer!();
                 Ok(())
             }
+        }
+    }
+
+    async fn handle_pinger(
+        client_name: &str,
+        tx: async_channel::Sender<Frame>,
+        timeout: Duration,
+    ) -> Result<(), Error> {
+        loop {
+            time::sleep(timeout).await;
+            if tx.is_full() {
+                warn!("client {} queue is full, force unregistering", client_name);
+                return Err(Error::io("client queue overflow"));
+            }
+            tx.send(Arc::new(FrameData::new_nop())).await?;
         }
     }
 
@@ -1426,7 +1413,12 @@ impl Broker {
     {
         loop {
             let mut buf = vec![0; 9];
-            reader.read_exact(&mut buf).await?;
+            let r_len = reader.read(&mut buf).await?;
+            if r_len == 0 {
+                return Ok(());
+            } else if r_len < 9 {
+                time::timeout(timeout, reader.read_exact(&mut buf[r_len..])).await??;
+            }
             let flags = buf[4];
             if flags == 0 {
                 // OP_NOP
@@ -1542,9 +1534,17 @@ impl Broker {
                                 true
                             };
                             if allowed {
-                                if let Err(e) =
-                                    send!(db, client, target, None, buf, payload_pos, len, realtime)
-                                {
+                                if let Err(e) = send!(
+                                    db,
+                                    client,
+                                    target,
+                                    None,
+                                    buf,
+                                    payload_pos,
+                                    len,
+                                    realtime,
+                                    Some(timeout)
+                                ) {
                                     if qos.needs_ack() {
                                         send_ack!(e.kind as u8, realtime);
                                     }
@@ -1572,7 +1572,8 @@ impl Broker {
                                     buf,
                                     payload_pos,
                                     len,
-                                    realtime
+                                    realtime,
+                                    Some(timeout)
                                 );
                                 if qos.needs_ack() {
                                     send_ack!(RESPONSE_OK, realtime);
@@ -1590,7 +1591,17 @@ impl Broker {
                             if allowed {
                                 let len = buf.len() as u64;
                                 let realtime = qos.is_realtime();
-                                publish!(db, client, target, None, buf, payload_pos, len, realtime);
+                                publish!(
+                                    db,
+                                    client,
+                                    target,
+                                    None,
+                                    buf,
+                                    payload_pos,
+                                    len,
+                                    realtime,
+                                    Some(timeout)
+                                );
                                 if qos.needs_ack() {
                                     send_ack!(RESPONSE_OK, realtime);
                                 }
@@ -1603,6 +1614,57 @@ impl Broker {
                 }
             }
         }
+    }
+
+    async fn handle_writer<W>(
+        rx: EventChannel,
+        writer: &mut TtlBufWriter<W>,
+        timeout: Duration,
+    ) -> Result<(), Error>
+    where
+        W: AsyncWriteExt + Unpin + Send + Sync + 'static,
+    {
+        while let Ok(frame) = rx.recv().await {
+            macro_rules! write_data {
+                ($data: expr, $flush: expr) => {
+                    time::timeout(timeout, writer.write($data, $flush)).await??;
+                };
+            }
+            if frame.kind == FrameKind::Prepared {
+                write_data!(&frame.buf, frame.realtime.into());
+            } else {
+                let sender = frame.sender.as_ref().map(String::as_bytes);
+                let topic = frame.topic.as_ref().map(String::as_bytes);
+                #[allow(clippy::redundant_closure_for_method_calls)]
+                let mut extra_len = sender.map_or(0, |v| v.len() + 1);
+                if let Some(t) = topic.as_ref() {
+                    extra_len += t.len() + 1;
+                }
+                if let Some(header) = frame.header.as_ref() {
+                    extra_len += header.len();
+                }
+                let mut buf = Vec::with_capacity(6 + extra_len);
+                buf.push(frame.kind as u8); // byte 0
+                let frame_len = extra_len + frame.buf.len() - frame.payload_pos;
+                #[allow(clippy::cast_possible_truncation)]
+                buf.extend_from_slice(&(frame_len as u32).to_le_bytes()); // bytes 1-4
+                buf.push(if frame.realtime { 1 } else { 0 }); // byte 5 - reserved
+                if let Some(s) = sender {
+                    buf.extend_from_slice(s);
+                    buf.push(0x00);
+                }
+                if let Some(t) = topic.as_ref() {
+                    buf.extend_from_slice(t);
+                    buf.push(0x00);
+                };
+                write_data!(&buf, Flush::No);
+                if let Some(header) = frame.header() {
+                    write_data!(header, Flush::No);
+                }
+                write_data!(frame.payload(), frame.realtime.into());
+            }
+        }
+        Ok(())
     }
 }
 
