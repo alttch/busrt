@@ -41,6 +41,6 @@ async fn main() {
         .call(target, "get", empty_payload!(), QoS::Processed)
         .await
         .unwrap();
-    let amount: Amount = rmp_serde::from_read_ref(result.payload()).unwrap();
+    let amount: Amount = rmp_serde::from_slice(result.payload()).unwrap();
     println!("{}", amount.value);
 }

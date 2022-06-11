@@ -41,7 +41,7 @@ impl RpcHandlers for MyHandlers {
                 Ok(Some(rmp_serde::to_vec_named(&payload)?))
             }
             "add" => {
-                let params: AddParams = rmp_serde::from_read_ref(event.payload())?;
+                let params: AddParams = rmp_serde::from_slice(event.payload())?;
                 self.counter
                     .fetch_add(params.value, atomic::Ordering::SeqCst);
                 Ok(None)

@@ -23,7 +23,7 @@ impl RpcHandlers for MyHandlers {
         match event.parse_method()? {
             "test" => Ok(Some("passed".as_bytes().to_vec())),
             "ping" => {
-                let params: PingParams = rmp_serde::from_read_ref(event.payload())?;
+                let params: PingParams = rmp_serde::from_slice(event.payload())?;
                 Ok(params.message.map(|m| m.as_bytes().to_vec()))
             }
             _ => Err(RpcError::method(None)),
