@@ -19,6 +19,7 @@ pub struct ClientInfo<'a> {
     pub w_frames: u64,
     pub w_bytes: u64,
     pub queue: usize,
+    pub instances: usize
 }
 impl<'a> Ord for ClientInfo<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {

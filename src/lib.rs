@@ -38,6 +38,8 @@ pub const DEFAULT_BUF_SIZE: usize = 8192;
 
 pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 
+pub const SECONDARY_SEP: &str = "%%";
+
 /// When a frame is sent, methods do not wait for the result, but they return OpConfirm type to let
 /// the sender get the result if required.
 ///

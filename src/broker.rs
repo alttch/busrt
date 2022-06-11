@@ -6,6 +6,7 @@ use crate::common::now_ns;
 use crate::common::{BrokerInfo, BrokerStats};
 #[cfg(feature = "rpc")]
 use crate::common::{ClientInfo, ClientList};
+use crate::SECONDARY_SEP;
 use crate::{Error, ErrorKind, GREETINGS, PROTOCOL_VERSION};
 use crate::{EventChannel, OpConfirm};
 use crate::{Frame, FrameData, FrameKind, FrameOp, QoS};
@@ -417,6 +418,7 @@ impl ElbusClientKind {
 #[derive(Debug)]
 struct ElbusClient {
     name: String,
+    primary_name: String,
     kind: ElbusClientKind,
     source: Option<String>,
     port: Option<String>,
@@ -427,6 +429,8 @@ struct ElbusClient {
     r_bytes: atomic::AtomicU64,
     w_frames: atomic::AtomicU64,
     w_bytes: atomic::AtomicU64,
+    primary: bool,
+    secondaries: std::sync::Mutex<HashSet<String>>,
 }
 
 impl fmt::Display for ElbusClient {
@@ -438,16 +442,19 @@ impl fmt::Display for ElbusClient {
 impl ElbusClient {
     pub fn new(
         name: &str,
+        primary_name: &str,
         queue_size: usize,
         kind: ElbusClientKind,
         source: Option<String>,
         port: Option<String>,
     ) -> (Self, EventChannel, triggered::Listener) {
         let (tx, rx) = async_channel::bounded(queue_size);
+        let primary = name == primary_name;
         let (disconnect_trig, disconnect_listener) = triggered::trigger();
         (
             Self {
                 name: name.to_owned(),
+                primary_name: primary_name.to_owned(),
                 kind,
                 source,
                 port,
@@ -458,6 +465,8 @@ impl ElbusClient {
                 r_bytes: atomic::AtomicU64::new(0),
                 w_frames: atomic::AtomicU64::new(0),
                 w_bytes: atomic::AtomicU64::new(0),
+                primary,
+                secondaries: <_>::default(),
             },
             rx,
             disconnect_listener,
@@ -598,16 +607,32 @@ impl BrokerDb {
         #[cfg(feature = "rpc")]
         // copy name for the announce
         let name = client.name.clone();
+        let primary = client.primary;
         self.insert_client(client)?;
         #[cfg(feature = "rpc")]
-        if let Err(e) = self.announce(BrokerEvent::reg(&name)).await {
-            error!("{}", e);
+        if primary {
+            if let Err(e) = self.announce(BrokerEvent::reg(&name)).await {
+                error!("{}", e);
+            }
         }
         Ok(())
     }
     fn insert_client(&self, client: Arc<ElbusClient>) -> Result<(), Error> {
-        if let hash_map::Entry::Vacant(x) = self.clients.write().unwrap().entry(client.name.clone())
-        {
+        let mut clients = self.clients.write().unwrap();
+        let primary_client = if client.primary {
+            None
+        } else {
+            Some(
+                clients
+                    .get_mut(&client.primary_name)
+                    .map(|c| c.clone())
+                    .ok_or_else(Error::not_registered)?,
+            )
+        };
+        if let hash_map::Entry::Vacant(x) = clients.entry(client.name.clone()) {
+            if let Some(pc) = primary_client {
+                pc.secondaries.lock().unwrap().insert(client.name.clone());
+            }
             {
                 let mut bdb = self.broadcasts.write().unwrap();
                 bdb.register_client(&client.name, &client);
@@ -643,8 +668,10 @@ impl BrokerDb {
     async fn unregister_client(&self, client: &Arc<ElbusClient>) {
         self.drop_client(client);
         #[cfg(feature = "rpc")]
-        if let Err(e) = self.announce(BrokerEvent::unreg(&client.name)).await {
-            error!("{}", e);
+        if client.primary {
+            if let Err(e) = self.announce(BrokerEvent::unreg(&client.name)).await {
+                error!("{}", e);
+            }
         }
     }
     fn drop_client(&self, client: &Arc<ElbusClient>) {
@@ -657,6 +684,21 @@ impl BrokerDb {
             .unwrap()
             .unregister_client(&client.name, client);
         self.clients.write().unwrap().remove(&client.name);
+        if client.primary {
+            let mut secondaries = client.secondaries.lock().unwrap();
+            for secondary in secondaries.iter() {
+                let sec = self.clients.read().unwrap().get(secondary).cloned();
+                if let Some(sec) = sec {
+                    if sec.kind != ElbusClientKind::Internal {
+                        sec.disconnect_trig.trigger();
+                    }
+                    self.drop_client(&sec);
+                }
+            }
+            secondaries.clear();
+        } else if let Some(primary) = self.clients.read().unwrap().get(&client.primary_name) {
+            primary.secondaries.lock().unwrap().remove(&client.name);
+        }
     }
 }
 
@@ -908,6 +950,7 @@ impl RpcHandlers for BrokerRpcHandlers {
                 let mut clients: Vec<ClientInfo> = db
                     .values()
                     .into_iter()
+                    .filter(|c| c.primary)
                     .map(|v| ClientInfo {
                         name: &v.name,
                         kind: v.kind.as_str(),
@@ -918,6 +961,7 @@ impl RpcHandlers for BrokerRpcHandlers {
                         w_frames: v.w_frames.load(atomic::Ordering::SeqCst),
                         w_bytes: v.w_bytes.load(atomic::Ordering::SeqCst),
                         queue: v.tx.len(),
+                        instances: v.secondaries.lock().unwrap().len() + 1,
                     })
                     .collect();
                 clients.sort();
@@ -1095,8 +1139,17 @@ impl Broker {
         self.db.announce(event).await
     }
     pub async fn register_client(&self, name: &str) -> Result<Client, Error> {
-        let (c, rx, _) =
-            ElbusClient::new(name, self.queue_size, ElbusClientKind::Internal, None, None);
+        let client_primary_name = name
+            .find(SECONDARY_SEP)
+            .map_or_else(|| name, |pos| &name[..pos]);
+        let (c, rx, _) = ElbusClient::new(
+            name,
+            client_primary_name,
+            self.queue_size,
+            ElbusClientKind::Internal,
+            None,
+            None,
+        );
         let client = Arc::new(c);
         self.db.register_client(client.clone()).await?;
         Ok(Client {
@@ -1105,6 +1158,18 @@ impl Broker {
             db: self.db.clone(),
             rx: Some(rx),
         })
+    }
+    /// # Panics
+    ///
+    /// Will panic if the client's secondaries mutex is poisoned
+    pub async fn register_secondary_for(&self, client: &Client) -> Result<Client, Error> {
+        if client.client.primary {
+            let secondary_id = client.client.secondaries.lock().unwrap().len();
+            let secondary_name = format!("{}{}{}", client.client.name, SECONDARY_SEP, secondary_id);
+            self.register_client(&secondary_name).await
+        } else {
+            Err(Error::not_supported("not a primary client"))
+        }
     }
     #[inline]
     pub async fn unregister_client(&self, client: &Client) {
@@ -1314,8 +1379,11 @@ impl Broker {
             write_and_flush!(&[ERR_DATA]);
             return Err(Error::data(format!("Invalid client name: {}", client_name)));
         }
+        let client_primary_name = client_name
+            .find(SECONDARY_SEP)
+            .map_or_else(|| client_name.as_str(), |pos| &client_name[..pos]);
         let aaa = if let Some(aaa_map) = params.aaa_map {
-            let aaa = aaa_map.lock().unwrap().get(&client_name).cloned();
+            let aaa = aaa_map.lock().unwrap().get(client_primary_name).cloned();
             if let Some(ref a) = aaa {
                 if let ClientIp::Addr(addr) = params.ip {
                     if !a.connect_allowed(addr) {
@@ -1340,6 +1408,7 @@ impl Broker {
         let (client, rx, disconnect_listener) = {
             let (c, rx, disconnect_listener) = ElbusClient::new(
                 &client_name,
+                client_primary_name,
                 queue_size,
                 params.kind,
                 params.source,

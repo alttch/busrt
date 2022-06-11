@@ -1,15 +1,3 @@
-use std::collections::BTreeMap;
-use std::marker::Unpin;
-use std::sync::atomic;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::unix;
-use tokio::net::{tcp, TcpStream, UnixStream};
-use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
-
 use crate::borrow::Cow;
 use crate::comm::{Flush, TtlBufWriter};
 use crate::Error;
@@ -21,7 +9,18 @@ use crate::GREETINGS;
 use crate::PING_FRAME;
 use crate::PROTOCOL_VERSION;
 use crate::RESPONSE_OK;
+use crate::SECONDARY_SEP;
 use crate::{Frame, FrameData, FrameKind, FrameOp};
+use std::collections::BTreeMap;
+use std::marker::Unpin;
+use std::sync::atomic;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::net::unix;
+use tokio::net::{tcp, TcpStream, UnixStream};
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
 use crate::client::AsyncClient;
 
@@ -95,6 +94,8 @@ pub struct Client {
     rx: Option<EventChannel>,
     connected: Arc<atomic::AtomicBool>,
     timeout: Duration,
+    config: Config,
+    secondary_counter: atomic::AtomicUsize,
 }
 
 macro_rules! prepare_frame_buf {
@@ -253,7 +254,22 @@ impl Client {
             rx: Some(rx),
             connected,
             timeout: config.timeout,
+            config: config.clone(),
+            secondary_counter: atomic::AtomicUsize::new(0),
         })
+    }
+    pub async fn register_secondary(&self) -> Result<Self, Error> {
+        if self.name.contains(SECONDARY_SEP) {
+            Err(Error::not_supported("not a primary client"))
+        } else {
+            let secondary_id = self
+                .secondary_counter
+                .fetch_add(1, atomic::Ordering::SeqCst);
+            let secondary_name = format!("{}{}{}", self.name, SECONDARY_SEP, secondary_id);
+            let mut config = self.config.clone();
+            config.name = secondary_name;
+            Self::connect(&config).await
+        }
     }
     #[inline]
     fn increment_frame_id(&mut self) {
