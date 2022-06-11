@@ -35,7 +35,9 @@ pub const RPC_ERROR_CODE_INTERNAL: i16 = -32603;
 /// client functions from inside.
 ///
 /// WARNING: when handling frames in blocking mode, it is forbidden to use the current RPC client
-/// directly or with any kind of bounded channels, otherwise the RPC client gets stuck!
+/// directly or with any kind of bounded channels, otherwise the RPC client may get stuck!
+///
+/// See https://elbus.readthedocs.io/en/latest/rpc_blocking.html
 #[derive(Default, Clone, Debug)]
 pub struct Options {
     blocking_notifications: bool,
@@ -439,9 +441,7 @@ fn prepare_call_payload(method: &str, id_bytes: &[u8]) -> Vec<u8> {
 }
 
 impl RpcClient {
-    /// # Panics
-    ///
-    /// Should not panic
+    /// creates RPC client with the specified handlers and the default options
     pub fn new<H>(client: impl AsyncClient + 'static, handlers: H) -> Self
     where
         H: RpcHandlers + Send + Sync + 'static,
@@ -449,14 +449,22 @@ impl RpcClient {
         Self::init(client, handlers, Options::default())
     }
 
-    /// # Panics
-    ///
-    /// Should not panic
+    /// creates RPC client with dummy handlers and the default options
+    pub fn new0(client: impl AsyncClient + 'static) -> Self {
+        Self::init(client, DummyHandlers {}, Options::default())
+    }
+
+    /// creates RPC client
     pub fn create<H>(client: impl AsyncClient + 'static, handlers: H, opts: Options) -> Self
     where
         H: RpcHandlers + Send + Sync + 'static,
     {
         Self::init(client, handlers, opts)
+    }
+
+    /// creates RPC client with dummy handlers
+    pub fn create0(client: impl AsyncClient + 'static, opts: Options) -> Self {
+        Self::init(client, DummyHandlers {}, opts)
     }
 
     fn init<H>(mut client: impl AsyncClient + 'static, handlers: H, opts: Options) -> Self
