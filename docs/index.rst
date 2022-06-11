@@ -62,7 +62,8 @@ sent after and the buffer is flushed automatically.
 
     Broker <broker>
     Protocol specification <protocol>
-    RPC layer specification <rpc-protocol>
+    RPC layer specification <rpc_protocol>
+    rpc_blocking
 
 .. toctree::
     :caption: Bindings
