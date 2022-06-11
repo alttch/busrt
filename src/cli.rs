@@ -164,7 +164,7 @@ fn ctable(titles: Vec<&str>) -> prettytable::Table {
 
 #[inline]
 fn decode_msgpack(payload: &[u8]) -> Result<Value, rmp_serde::decode::Error> {
-    rmp_serde::from_read_ref(payload)
+    rmp_serde::from_slice(payload)
 }
 
 #[inline]
@@ -584,8 +584,7 @@ async fn main() {
                         .call(".broker", "client.list", empty_payload!(), QoS::Processed)
                         .await
                         .unwrap();
-                    let mut clients: ClientList =
-                        rmp_serde::from_read_ref(result.payload()).unwrap();
+                    let mut clients: ClientList = rmp_serde::from_slice(result.payload()).unwrap();
                     clients.clients.sort();
                     let mut table = ctable(vec![
                         "name", "type", "source", "port", "r_frames", "r_bytes", "w_frames",
@@ -614,7 +613,7 @@ async fn main() {
                         .call(".broker", "stats", empty_payload!(), QoS::Processed)
                         .await
                         .unwrap();
-                    let stats: BrokerStats = rmp_serde::from_read_ref(result.payload()).unwrap();
+                    let stats: BrokerStats = rmp_serde::from_slice(result.payload()).unwrap();
                     let mut table = ctable(vec!["field", "value"]);
                     table.add_row(row!["r_frames", stats.r_frames]);
                     table.add_row(row!["r_bytes", stats.r_bytes]);
@@ -629,7 +628,7 @@ async fn main() {
                         .call(".broker", "info", empty_payload!(), QoS::Processed)
                         .await
                         .unwrap();
-                    let info: BrokerInfo = rmp_serde::from_read_ref(result.payload()).unwrap();
+                    let info: BrokerInfo = rmp_serde::from_slice(result.payload()).unwrap();
                     let mut table = ctable(vec!["field", "value"]);
                     table.add_row(row!["author", info.author]);
                     table.add_row(row!["version", info.version]);

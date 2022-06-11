@@ -921,7 +921,7 @@ impl RpcHandlers for BrokerRpcHandlers {
         let params: HashMap<String, Value> = if payload.is_empty() {
             HashMap::new()
         } else {
-            rmp_serde::from_read_ref(event.payload())?
+            rmp_serde::from_slice(event.payload())?
         };
         match event.parse_method()? {
             "test" => {
