@@ -39,7 +39,7 @@ Solutions
 * Do not use RPC calls during event handling. Great idea, but what if RPC calls
   are really required and it is impossible to process an event without them?
 
-* Keep RPC query empty and toss events into secondary queries, where they are
+* Keep RPC queue empty and toss events into secondary queries, where they are
   processed by blocking but background loop-handlers. Works fine with bounded
   channels until they are large enough. When the channels are full - blocks the
   RPC layer completely.
