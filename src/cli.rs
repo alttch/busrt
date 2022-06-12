@@ -255,7 +255,10 @@ async fn subscribe_topics(client: &mut Client, topics: &[String]) -> Result<(), 
         .iter()
         .for_each(|t| info!("subscribing to the topic {}", t.yellow()));
     client
-        .subscribe_bulk(topics.iter().map(String::as_str).collect(), QoS::Processed)
+        .subscribe_bulk(
+            &topics.iter().map(String::as_str).collect::<Vec<&str>>(),
+            QoS::Processed,
+        )
         .await
         .unwrap()
         .unwrap()

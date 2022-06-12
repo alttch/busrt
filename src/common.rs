@@ -19,7 +19,7 @@ pub struct ClientInfo<'a> {
     pub w_frames: u64,
     pub w_bytes: u64,
     pub queue: usize,
-    pub instances: usize
+    pub instances: usize,
 }
 impl<'a> Ord for ClientInfo<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -57,7 +57,7 @@ pub struct BrokerInfo<'a> {
 
 #[allow(clippy::ptr_arg)]
 #[cfg(feature = "rpc")]
-pub fn str_to_params_map<'a>(s: &'a Vec<&str>) -> Result<HashMap<&'a str, Value>, Error> {
+pub fn str_to_params_map<'a>(s: &'a [&'a str]) -> Result<HashMap<&'a str, Value>, Error> {
     let mut params: HashMap<&str, Value> = HashMap::new();
     for pair in s {
         if !pair.is_empty() {

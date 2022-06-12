@@ -229,7 +229,7 @@ impl AsyncClient for Client {
     /// # Panics
     ///
     /// Will panic if the mutex is poisoned
-    async fn subscribe_bulk(&mut self, topics: Vec<&str>, qos: QoS) -> Result<OpConfirm, Error> {
+    async fn subscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
         let mut db = self.db.subscriptions.write().unwrap();
         for topic in topics {
             if !db.subscribe(topic, &self.client) {
@@ -257,7 +257,7 @@ impl AsyncClient for Client {
     /// # Panics
     ///
     /// Will panic if the mutex is poisoned
-    async fn unsubscribe_bulk(&mut self, topics: Vec<&str>, qos: QoS) -> Result<OpConfirm, Error> {
+    async fn unsubscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
         let mut db = self.db.subscriptions.write().unwrap();
         for topic in topics {
             if !db.unsubscribe(topic, &self.client) {

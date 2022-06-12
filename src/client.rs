@@ -36,8 +36,8 @@ pub trait AsyncClient: Send + Sync {
     ) -> Result<OpConfirm, Error>;
     async fn subscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error>;
     async fn unsubscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error>;
-    async fn subscribe_bulk(&mut self, topics: Vec<&str>, qos: QoS) -> Result<OpConfirm, Error>;
-    async fn unsubscribe_bulk(&mut self, topics: Vec<&str>, qos: QoS) -> Result<OpConfirm, Error>;
+    async fn subscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error>;
+    async fn unsubscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error>;
     async fn ping(&mut self) -> Result<(), Error>;
     fn is_connected(&self) -> bool;
     fn get_connected_beacon(&self) -> Option<Arc<atomic::AtomicBool>>;
@@ -49,5 +49,5 @@ pub trait AsyncClient: Send + Sync {
 macro_rules! empty_payload {
     () => {
         $crate::borrow::Cow::Borrowed(&[])
-    }
+    };
 }

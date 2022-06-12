@@ -340,7 +340,7 @@ impl AsyncClient for Client {
     async fn unsubscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
         send_frame!(self, topic.as_bytes(), FrameOp::UnsubscribeTopic, qos)
     }
-    async fn subscribe_bulk(&mut self, topics: Vec<&str>, qos: QoS) -> Result<OpConfirm, Error> {
+    async fn subscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
         let mut payload = Vec::new();
         for topic in topics {
             if !payload.is_empty() {
@@ -350,7 +350,7 @@ impl AsyncClient for Client {
         }
         send_frame!(self, &payload, FrameOp::SubscribeTopic, qos)
     }
-    async fn unsubscribe_bulk(&mut self, topics: Vec<&str>, qos: QoS) -> Result<OpConfirm, Error> {
+    async fn unsubscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
         let mut payload = Vec::new();
         for topic in topics {
             if !payload.is_empty() {
