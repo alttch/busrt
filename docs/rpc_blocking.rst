@@ -111,6 +111,18 @@ client object:
 The secondary client is disconnected automatically if the primary one is
 disconnected or dropped.
 
+Handling frames
+~~~~~~~~~~~~~~~
+
+ELBUS frames and events have two methods to identify the frame/event sender:
+
+* **frame.sender()** returns the full peer client name, including secondary
+  sender suffix. Must be used for RPC replies etc., where it is important to
+  deliver the frame back to the sender peer.
+
+* **frame.primary_sender()** returns the primary sender name. Must be used in
+  logging, ACL processing etc.
+
 Creating secondary clients in other languages
 ---------------------------------------------
 

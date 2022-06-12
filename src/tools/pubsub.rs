@@ -19,6 +19,10 @@ impl Publication {
     pub fn sender(&self) -> &str {
         self.frame.sender()
     }
+    #[inline]
+    pub fn primary_sender(&self) -> &str {
+        self.frame.primary_sender()
+    }
     /// # Panics
     ///
     /// Will not panic as all processed frames always have topics

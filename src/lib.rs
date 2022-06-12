@@ -424,6 +424,18 @@ impl FrameData {
     pub fn sender(&self) -> &str {
         self.sender.as_ref().unwrap()
     }
+    /// # Panics
+    ///
+    /// Will panic if called for a prepared frame
+    #[inline]
+    pub fn primary_sender(&self) -> &str {
+        let primary_sender = self.sender.as_ref().unwrap();
+        if let Some(pos) = primary_sender.find(SECONDARY_SEP) {
+            &primary_sender[..pos]
+        } else {
+            primary_sender
+        }
+    }
     /// Filled for pub/sub communications
     #[inline]
     pub fn topic(&self) -> Option<&str> {

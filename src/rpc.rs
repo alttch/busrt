@@ -115,6 +115,10 @@ impl RpcEvent {
         self.frame.sender()
     }
     #[inline]
+    pub fn primary_sender(&self) -> &str {
+        self.frame.primary_sender()
+    }
+    #[inline]
     pub fn payload(&self) -> &[u8] {
         &self.frame().payload()[self.payload_pos..]
     }

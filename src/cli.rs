@@ -269,9 +269,10 @@ async fn subscribe_topics(client: &mut Client, topics: &[String]) -> Result<(), 
 async fn print_frame(frame: &Frame) {
     info!("Incoming frame {} byte(s)", fnum!(frame.payload().len()));
     println!(
-        "{} from {}",
+        "{} from {} ({})",
         frame.kind().to_debug_string().yellow(),
-        frame.sender().bold()
+        frame.sender().bold(),
+        frame.primary_sender()
     );
     if let Some(topic) = frame.topic() {
         println!("topic: {}", topic.magenta());
@@ -293,9 +294,10 @@ impl RpcHandlers for Handlers {
             fnum!(event.payload().len())
         );
         println!(
-            "{} from {}",
+            "{} from {} ({})",
             event.kind().to_debug_string().yellow(),
-            event.sender().bold()
+            event.sender().bold(),
+            event.primary_sender()
         );
         print_payload(event.payload(), false).await;
         sep();
@@ -313,7 +315,11 @@ impl RpcHandlers for Handlers {
                 .blue()
                 .bold()
         );
-        println!("from {}", event.sender().bold());
+        println!(
+            "from {} ({})",
+            event.sender().bold(),
+            event.primary_sender()
+        );
         print_payload(event.payload(), false).await;
         sep();
         Ok(None)
