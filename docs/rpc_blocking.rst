@@ -24,13 +24,14 @@ Why? Let us explain:
   processed by the blocking frame handler
 
 * To keep ordering, RPC layer blocks frame processing until the handler
-  executing is over
+  execution is over
 
 * The handler calls RPC method and... gets stuck. The reply can not be received
-  as the RPC layer is blocked and waits until the handler finishes its task
+  as the RPC layer is blocked and waits until the handler finishes its current
+  task
 
-* As the result, the whole RPC layer is blocked and IPC communication from/to
-  the process is no longer possible
+* As the result, the whole RPC layer is blocked and IPC communications from/to
+  the process are no longer possible
 
 Solutions
 ---------
@@ -38,15 +39,15 @@ Solutions
 * Do not use RPC calls during event handling. Great idea, but what if RPC calls
   are really required and it is impossible to process an event without them?
 
-* Keep RPC query empty and toss events to secondary queries, where they are
-  processed by background loop-handlers. Works fine with bounded channels until
-  they are big enough. When the channels are full - blocks the RPC layer
-  completely.
+* Keep RPC query empty and toss events into secondary queries, where they are
+  processed by blocking but background loop-handlers. Works fine with bounded
+  channels until they are large enough. When the channels are full - blocks the
+  RPC layer completely.
 
-* Toss events to unbounded channels. Works fine until the client is not
-  flooded.
+* Toss events to unbounded channels. Works fine until the client is flooded.
 
-* Register a dedicated client for in-handler RPC calls. The best idea possible.
+What can be done? Only registering a dedicated client for in-handler RPC calls.
+The best idea possible.
 
 Secondary clients
 =================
@@ -60,7 +61,7 @@ broker as a secondary client for the primary one, called "NAME".
 How secondary clients work:
 
 * The client must have an unique suffix SFX, otherwise the broker refuses
-  registration with BUSY (0x76) error.
+  registration with BUSY (0x76) error
 
 * The primary client "NAME" must be registered in the broker, otherwise the
   registration of secondary one is refused with CLIENT_NOT_REGISTERED (0x71)
