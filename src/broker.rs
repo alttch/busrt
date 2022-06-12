@@ -205,6 +205,7 @@ pub struct Client {
     client: Arc<ElbusClient>,
     db: Arc<BrokerDb>,
     rx: Option<EventChannel>,
+    secondary_counter: atomic::AtomicUsize,
 }
 
 #[async_trait]
@@ -1157,6 +1158,7 @@ impl Broker {
             client,
             db: self.db.clone(),
             rx: Some(rx),
+            secondary_counter: atomic::AtomicUsize::new(0),
         })
     }
     /// # Panics
@@ -1164,7 +1166,9 @@ impl Broker {
     /// Will panic if the client's secondaries mutex is poisoned
     pub async fn register_secondary_for(&self, client: &Client) -> Result<Client, Error> {
         if client.client.primary {
-            let secondary_id = client.client.secondaries.lock().unwrap().len();
+            let secondary_id = client
+                .secondary_counter
+                .fetch_add(1, atomic::Ordering::SeqCst);
             let secondary_name = format!("{}{}{}", client.client.name, SECONDARY_SEP, secondary_id);
             self.register_client(&secondary_name).await
         } else {
