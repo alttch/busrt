@@ -65,6 +65,9 @@ How secondary clients work:
 * The primary client "NAME" must be registered in the broker, otherwise the
   registration of secondary one is refused with CLIENT_NOT_REGISTERED (0x71)
 
+* If security model is used, secondary connections have the same AAA as the
+  primary one
+
 * The broker never sends register/unregister announcements for secondaries
 
 * If the primary client is disconnected from the broker, all its secondaries
