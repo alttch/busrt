@@ -1,3 +1,6 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
