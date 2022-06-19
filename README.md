@@ -19,6 +19,9 @@ without any backward compatibility. ELBUS (stands actually for "EVA ICS Local
 Bus") is the key component of [EVA ICS](https://www.eva-ics.com/) v4, which is
 going to be released in 2022-2023.
 
+The name "ELBUS" is also only the working one, after the official release the
+bus will be renamed, as well as its crates, bindings and modules.
+
 ## Documentation
 
 Available at <https://elbus.readthedocs.io/>
