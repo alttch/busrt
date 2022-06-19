@@ -12,6 +12,7 @@ autoexamples = false
 
 [package.metadata.docs.rs]
 features = ["broker", "ipc", "rpc"]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.playground]
 features = ["broker", "ipc", "rpc"]
