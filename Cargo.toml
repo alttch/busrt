@@ -101,3 +101,9 @@ required-features = ["ipc"]
 [[example]]
 name = "client_sender"
 required-features = ["ipc"]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+
