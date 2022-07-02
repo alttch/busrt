@@ -608,6 +608,7 @@ impl BrokerDb {
         #[cfg(feature = "rpc")]
         // copy name for the announce
         let name = client.name.clone();
+        #[cfg(feature = "rpc")]
         let primary = client.primary;
         self.insert_client(client)?;
         #[cfg(feature = "rpc")]
