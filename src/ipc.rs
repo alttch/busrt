@@ -18,7 +18,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::unix;
-use tokio::net::{tcp, TcpStream, UnixStream};
+#[cfg(not(target_os = "windows"))]
+use tokio::net::UnixStream;
+use tokio::net::{tcp, TcpStream};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
@@ -31,6 +33,7 @@ use async_trait::async_trait;
 type ResponseMap = Arc<Mutex<BTreeMap<u32, oneshot::Sender<Result<(), Error>>>>>;
 
 enum Writer {
+    #[cfg(not(target_os = "windows"))]
     Unix(TtlBufWriter<unix::OwnedWriteHalf>),
     Tcp(TtlBufWriter<tcp::OwnedWriteHalf>),
 }
@@ -38,6 +41,7 @@ enum Writer {
 impl Writer {
     pub async fn write(&mut self, buf: &[u8], flush: Flush) -> Result<(), Error> {
         match self {
+            #[cfg(not(target_os = "windows"))]
             Writer::Unix(w) => w.write(buf, flush).await.map_err(Into::into),
             Writer::Tcp(w) => w.write(buf, flush).await.map_err(Into::into),
         }
@@ -198,28 +202,35 @@ impl Client {
             || config.path.ends_with(".ipc")
             || config.path.starts_with('/')
         {
-            let stream = UnixStream::connect(&config.path).await?;
-            let (r, mut writer) = stream.into_split();
-            let mut reader = BufReader::with_capacity(config.buf_size, r);
-            let (reader_fut, rx) = connect_broker!(
-                &config.name,
-                reader,
-                writer,
-                responses,
-                connected,
-                config.timeout,
-                config.queue_size
-            );
-            (
-                Writer::Unix(TtlBufWriter::new(
+            #[cfg(target_os = "windows")]
+            {
+                return Err(Error::not_supported("unix pipes"));
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                let stream = UnixStream::connect(&config.path).await?;
+                let (r, mut writer) = stream.into_split();
+                let mut reader = BufReader::with_capacity(config.buf_size, r);
+                let (reader_fut, rx) = connect_broker!(
+                    &config.name,
+                    reader,
                     writer,
-                    config.buf_size,
-                    config.buf_ttl,
+                    responses,
+                    connected,
                     config.timeout,
-                )),
-                reader_fut,
-                rx,
-            )
+                    config.queue_size
+                );
+                (
+                    Writer::Unix(TtlBufWriter::new(
+                        writer,
+                        config.buf_size,
+                        config.buf_ttl,
+                        config.timeout,
+                    )),
+                    reader_fut,
+                    rx,
+                )
+            }
         } else {
             let stream = TcpStream::connect(&config.path).await?;
             stream.set_nodelay(true)?;

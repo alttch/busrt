@@ -30,7 +30,9 @@ use std::time::Duration;
 use std::time::Instant;
 use submap::{AclMap, BroadcastMap, SubMap};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::{TcpListener, TcpStream, UnixListener, UnixStream};
+use tokio::net::{TcpListener, TcpStream};
+#[cfg(not(target_os = "windows"))]
+use tokio::net::{UnixListener, UnixStream};
 #[cfg(feature = "rpc")]
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -976,6 +978,7 @@ impl RpcHandlers for BrokerRpcHandlers {
     async fn handle_frame(&self, _frame: Frame) {}
 }
 
+#[cfg(not(target_os = "windows"))]
 #[allow(clippy::unnecessary_wraps)]
 #[inline]
 fn prepare_unix_stream(_stream: &UnixStream) -> Result<(), Error> {
@@ -1190,6 +1193,7 @@ impl Broker {
     pub fn force_disconnect(&self, name: &str) -> Result<(), Error> {
         self.db.trigger_disconnect(name)
     }
+    #[cfg(not(target_os = "windows"))]
     pub async fn spawn_unix_server(
         &mut self,
         path: &str,
