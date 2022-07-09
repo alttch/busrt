@@ -4,6 +4,8 @@ use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+#[cfg(target_os = "linux")]
+use tokio_timerfd::sleep as sleep_fd;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Flush {
@@ -41,10 +43,10 @@ where
         // flusher future
         let flusher = tokio::spawn(async move {
             while rx.recv().await.is_ok() {
-                #[cfg(target_os = "windows")]
+                #[cfg(not(target_os = "linux"))]
                 tokio::time::sleep(ttl).await;
-                #[cfg(not(target_os = "windows"))]
-                let _r = tokio_timerfd::sleep(ttl).await;
+                #[cfg(target_os = "linux")]
+                let _r = sleep_fd(ttl).await;
                 if let Ok(mut writer) = tokio::time::timeout(timeout, wf.lock()).await {
                     let _r = tokio::time::timeout(timeout, writer.flush()).await;
                 }

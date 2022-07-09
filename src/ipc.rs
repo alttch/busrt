@@ -17,6 +17,7 @@ use std::sync::atomic;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+#[cfg(not(target_os = "windows"))]
 use tokio::net::unix;
 #[cfg(not(target_os = "windows"))]
 use tokio::net::UnixStream;
