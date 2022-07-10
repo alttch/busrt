@@ -205,7 +205,7 @@ impl Client {
         {
             #[cfg(target_os = "windows")]
             {
-                return Err(Error::not_supported("unix pipes"));
+                return Err(Error::not_supported("unix sockets"));
             }
             #[cfg(not(target_os = "windows"))]
             {
