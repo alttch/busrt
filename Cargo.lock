@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "elbus"
-version = "0.2.10"
+version = "0.2.11"
 dependencies = [
  "async-channel",
  "async-io",

@@ -1,6 +1,6 @@
 [package]
 name = "elbus"
-version = "0.2.10"
+version = "0.2.11"
 edition = "2021"
 authors = ["Sergei S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -18,10 +18,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 features = ["broker", "ipc", "rpc"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-tokio-timerfd = { version = "0.2.0", optional = true }
+tokio-timerfd = { version = "0.2.0" }
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
-async-io = { version = "1.7.0", optional = true }
+async-io = { version = "1.7.0" }
 
 [dependencies]
 tokio = { version = "1.15.0", features = ["full"] }
@@ -55,9 +55,9 @@ triggered = { version = "0.1.2", optional = true }
 [features]
 server = ["log", "syslog", "chrono", "colored", "clap",
           "lazy_static", "jemallocator", "fork", "broker"]
-broker = ["log", "submap", "async-trait", "unix-named-pipe", "nix", "tokio-timerfd",
+broker = ["log", "submap", "async-trait", "unix-named-pipe", "nix",
           "ipnetwork", "triggered"]
-ipc = ["log", "async-trait", "tokio-timerfd"]
+ipc = ["log", "async-trait"]
 rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value"]
 cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark",
       "prettytable-rs", "hostname", "hex", "num-format", "jemallocator",
