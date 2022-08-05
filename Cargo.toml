@@ -1,6 +1,6 @@
 [package]
 name = "elbus"
-version = "0.2.9"
+version = "0.2.10"
 edition = "2021"
 authors = ["Sergei S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -19,6 +19,9 @@ features = ["broker", "ipc", "rpc"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tokio-timerfd = { version = "0.2.0", optional = true }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+async-io = { version = "1.7.0", optional = true }
 
 [dependencies]
 tokio = { version = "1.15.0", features = ["full"] }

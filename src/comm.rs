@@ -44,7 +44,7 @@ where
         let flusher = tokio::spawn(async move {
             while rx.recv().await.is_ok() {
                 #[cfg(not(target_os = "linux"))]
-                tokio::time::sleep(ttl).await;
+                async_io::Timer::after(ttl).await;
                 #[cfg(target_os = "linux")]
                 let _r = sleep_fd(ttl).await;
                 if let Ok(mut writer) = tokio::time::timeout(timeout, wf.lock()).await {
