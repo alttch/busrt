@@ -19,7 +19,6 @@ use log::{debug, error, trace, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::{hash_map, HashMap, HashSet};
 use std::fmt;
-use std::hash::{Hash, Hasher};
 use std::marker::Unpin;
 use std::net::IpAddr;
 use std::net::SocketAddr;
@@ -421,6 +420,7 @@ impl ElbusClientKind {
 #[derive(Debug)]
 struct ElbusClient {
     name: String,
+    digest: submap::digest::Sha256Digest,
     primary_name: String,
     kind: ElbusClientKind,
     source: Option<String>,
@@ -451,12 +451,14 @@ impl ElbusClient {
         source: Option<String>,
         port: Option<String>,
     ) -> (Self, EventChannel, triggered::Listener) {
+        let digest = submap::digest::sha256(name);
         let (tx, rx) = async_channel::bounded(queue_size);
         let primary = name == primary_name;
         let (disconnect_trig, disconnect_listener) = triggered::trigger();
         (
             Self {
                 name: name.to_owned(),
+                digest,
                 primary_name: primary_name.to_owned(),
                 kind,
                 source,
@@ -479,17 +481,23 @@ impl ElbusClient {
 
 impl PartialEq for ElbusClient {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
+        self.digest == other.digest
+    }
+}
+
+impl Ord for ElbusClient {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.digest.cmp(&other.digest)
+    }
+}
+
+impl PartialOrd for ElbusClient {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
 impl Eq for ElbusClient {}
-
-impl Hash for ElbusClient {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
 
 #[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone)]
