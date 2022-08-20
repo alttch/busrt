@@ -162,6 +162,8 @@ macro_rules! handle_term_signal {
 
 #[allow(clippy::too_many_lines)]
 fn main() {
+    #[cfg(feature = "tracing")]
+    console_subscriber::init();
     let opts: Opts = Opts::parse();
     if opts.verbose {
         set_verbose_logger(LevelFilter::Trace);
