@@ -382,6 +382,7 @@ dependencies = [
  "log",
  "nix",
  "num-format",
+ "parking_lot",
  "prettytable-rs 0.9.0",
  "rmp-serde",
  "serde",

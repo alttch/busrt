@@ -433,7 +433,7 @@ struct ElbusClient {
     w_frames: atomic::AtomicU64,
     w_bytes: atomic::AtomicU64,
     primary: bool,
-    secondaries: std::sync::Mutex<HashSet<String>>,
+    secondaries: parking_lot::Mutex<HashSet<String>>,
 }
 
 impl fmt::Display for ElbusClient {
@@ -643,7 +643,7 @@ impl BrokerDb {
         };
         if let hash_map::Entry::Vacant(x) = clients.entry(client.name.clone()) {
             if let Some(pc) = primary_client {
-                pc.secondaries.lock().unwrap().insert(client.name.clone());
+                pc.secondaries.lock().insert(client.name.clone());
             }
             {
                 let mut bdb = self.broadcasts.write().unwrap();
@@ -697,7 +697,7 @@ impl BrokerDb {
             .unregister_client(&client.name, client);
         self.clients.write().unwrap().remove(&client.name);
         if client.primary {
-            let mut secondaries = client.secondaries.lock().unwrap();
+            let mut secondaries = client.secondaries.lock();
             for secondary in secondaries.iter() {
                 let sec = self.clients.read().unwrap().get(secondary).cloned();
                 if let Some(sec) = sec {
@@ -709,12 +709,12 @@ impl BrokerDb {
             }
             secondaries.clear();
         } else if let Some(primary) = self.clients.read().unwrap().get(&client.primary_name) {
-            primary.secondaries.lock().unwrap().remove(&client.name);
+            primary.secondaries.lock().remove(&client.name);
         }
     }
 }
 
-pub type AaaMap = Arc<std::sync::Mutex<HashMap<String, ClientAaa>>>;
+pub type AaaMap = Arc<parking_lot::Mutex<HashMap<String, ClientAaa>>>;
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
@@ -973,7 +973,7 @@ impl RpcHandlers for BrokerRpcHandlers {
                         w_frames: v.w_frames.load(atomic::Ordering::SeqCst),
                         w_bytes: v.w_bytes.load(atomic::Ordering::SeqCst),
                         queue: v.tx.len(),
-                        instances: v.secondaries.lock().unwrap().len() + 1,
+                        instances: v.secondaries.lock().len() + 1,
                     })
                     .collect();
                 clients.sort();
@@ -1400,7 +1400,7 @@ impl Broker {
             .find(SECONDARY_SEP)
             .map_or_else(|| client_name.as_str(), |pos| &client_name[..pos]);
         let aaa = if let Some(aaa_map) = params.aaa_map {
-            let aaa = aaa_map.lock().unwrap().get(client_primary_name).cloned();
+            let aaa = aaa_map.lock().get(client_primary_name).cloned();
             if let Some(ref a) = aaa {
                 if let ClientIp::Addr(addr) = params.ip {
                     if !a.connect_allowed(addr) {

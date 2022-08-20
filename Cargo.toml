@@ -46,14 +46,15 @@ nix = { version = "0.25.0", optional = true }
 ipnetwork = { version = "0.20.0", optional = true }
 triggered = { version = "0.1.2", optional = true }
 async-io = "1.8.0"
+parking_lot = { version = "0.12.1", optional = true }
 
 [features]
 server = ["log", "syslog", "chrono", "colored", "clap",
           "lazy_static", "jemallocator", "fork", "broker"]
 broker = ["log", "submap", "async-trait", "unix-named-pipe", "nix",
-          "ipnetwork", "triggered"]
+          "ipnetwork", "triggered", "parking_lot"]
 ipc = ["log", "async-trait"]
-rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value"]
+rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value", "parking_lot"]
 cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark",
       "prettytable-rs", "hostname", "hex", "num-format", "jemallocator",
       "serde_json", "atty"]
@@ -101,6 +102,9 @@ required-features = ["ipc"]
 [[example]]
 name = "client_sender"
 required-features = ["ipc"]
+
+[profile.dev]
+overflow-checks = false
 
 [profile.release]
 strip = true

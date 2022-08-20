@@ -270,7 +270,7 @@ impl RpcHandlers for DummyHandlers {
     async fn handle_frame(&self, _frame: Frame) {}
 }
 
-type CallMap = Arc<std::sync::Mutex<BTreeMap<u32, oneshot::Sender<RpcEvent>>>>;
+type CallMap = Arc<parking_lot::Mutex<BTreeMap<u32, oneshot::Sender<RpcEvent>>>>;
 
 #[async_trait]
 pub trait Rpc {
@@ -307,10 +307,10 @@ pub trait Rpc {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct RpcClient {
-    call_id: std::sync::Mutex<u32>,
+    call_id: parking_lot::Mutex<u32>,
     timeout: Option<Duration>,
     client: Arc<Mutex<dyn AsyncClient>>,
-    processor_fut: Arc<std::sync::Mutex<JoinHandle<()>>>,
+    processor_fut: Arc<parking_lot::Mutex<JoinHandle<()>>>,
     pinger_fut: Option<JoinHandle<()>>,
     calls: CallMap,
     connected: Option<Arc<atomic::AtomicBool>>,
@@ -411,7 +411,7 @@ async fn processor<C, H>(
                             event.frame().sender(),
                             id
                         );
-                        if let Some(tx) = { calls.lock().unwrap().remove(&id) } {
+                        if let Some(tx) = { calls.lock().remove(&id) } {
                             let _r = tx.send(event);
                         } else {
                             warn!("orphaned RPC response: {}", id);
@@ -480,7 +480,7 @@ impl RpcClient {
         let connected = client.get_connected_beacon();
         let client = Arc::new(Mutex::new(client));
         let calls: CallMap = <_>::default();
-        let processor_fut = Arc::new(std::sync::Mutex::new(tokio::spawn(processor(
+        let processor_fut = Arc::new(parking_lot::Mutex::new(tokio::spawn(processor(
             rx,
             client.clone(),
             calls.clone(),
@@ -494,7 +494,7 @@ impl RpcClient {
                 loop {
                     if let Err(e) = pinger_client.lock().await.ping().await {
                         error!("{}", e);
-                        pfut.lock().unwrap().abort();
+                        pfut.lock().abort();
                         break;
                     }
                     tokio::time::sleep(t).await;
@@ -502,7 +502,7 @@ impl RpcClient {
             })
         });
         Self {
-            call_id: std::sync::Mutex::new(0),
+            call_id: parking_lot::Mutex::new(0),
             timeout,
             client,
             processor_fut,
@@ -557,7 +557,7 @@ impl Rpc for RpcClient {
         qos: QoS,
     ) -> Result<RpcEvent, RpcError> {
         let call_id = {
-            let mut ci = self.call_id.lock().unwrap();
+            let mut ci = self.call_id.lock();
             let mut call_id = *ci;
             if call_id == u32::MAX {
                 call_id = 1;
@@ -569,13 +569,13 @@ impl Rpc for RpcClient {
         };
         let payload = prepare_call_payload(method, &call_id.to_le_bytes());
         let (tx, rx) = oneshot::channel();
-        self.calls.lock().unwrap().insert(call_id, tx);
+        self.calls.lock().insert(call_id, tx);
         macro_rules! unwrap_or_cancel {
             ($result: expr) => {
                 match $result {
                     Ok(v) => v,
                     Err(e) => {
-                        self.calls.lock().unwrap().remove(&call_id);
+                        self.calls.lock().remove(&call_id);
                         return Err(Into::<Error>::into(e).into());
                     }
                 }
@@ -610,7 +610,7 @@ impl Rpc for RpcClient {
 impl Drop for RpcClient {
     fn drop(&mut self) {
         self.pinger_fut.as_ref().map(JoinHandle::abort);
-        self.processor_fut.lock().unwrap().abort();
+        self.processor_fut.lock().abort();
     }
 }
 
