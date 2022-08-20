@@ -22,7 +22,7 @@ async fn main() {
     // create AAA map
     let aaa_map = AaaMap::default();
     {
-        let mut map = aaa_map.lock().unwrap();
+        let mut map = aaa_map.lock();
         map.insert(
             "test".to_owned(),
             ClientAaa::new().hosts_allow(vec![IpNetwork::V4("127.0.0.0/8".parse().unwrap())]),
