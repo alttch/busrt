@@ -103,6 +103,8 @@ pub struct Client {
     secondary_counter: atomic::AtomicUsize,
 }
 
+// keep these as macros to insure inline and avoid unecc. futures
+
 macro_rules! prepare_frame_buf {
     ($self: expr, $op: expr, $qos: expr) => {{
         $self.increment_frame_id();
@@ -147,6 +149,7 @@ macro_rules! send_frame_and_confirm {
 }
 
 macro_rules! send_frame {
+    // send to target or topic
     ($self: expr, $target: expr, $payload: expr, $op: expr, $qos: expr) => {{
         let mut buf = prepare_frame_buf!($self, $op, $qos);
         let t = $target.as_bytes();
@@ -156,6 +159,7 @@ macro_rules! send_frame {
         trace!("sending elbus {:?} to {} QoS={:?}", $op, $target, $qos);
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};
+    // zc-send to target or topic
     ($self: expr, $target: expr, $header: expr, $payload: expr, $op: expr, $qos: expr) => {{
         let mut buf = prepare_frame_buf!($self, $op, $qos);
         let t = $target.as_bytes();
@@ -168,6 +172,7 @@ macro_rules! send_frame {
         trace!("sending elbus {:?} to {} QoS={:?}", $op, $target, $qos);
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};
+    // send w/o a target
     ($self: expr, $payload: expr, $op: expr, $qos: expr) => {{
         let mut buf = prepare_frame_buf!($self, $op, $qos);
         buf.extend_from_slice(&($payload.len() as u32).to_le_bytes());
