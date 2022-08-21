@@ -1375,7 +1375,7 @@ impl Broker {
         let mut buf = GREETINGS.to_vec();
         buf.extend_from_slice(&PROTOCOL_VERSION.to_le_bytes());
         write_and_flush!(&buf);
-        let mut buf = vec![0; 3];
+        let mut buf = [0u8; 3];
         time::timeout(timeout, reader.read_exact(&mut buf)).await??;
         if buf[0] != GREETINGS[0] {
             write_and_flush!(&[ERR_NOT_SUPPORTED]);
@@ -1386,9 +1386,9 @@ impl Broker {
             return Err(Error::not_supported("unsupported protocol version"));
         }
         write_and_flush!(&[RESPONSE_OK]);
-        let mut buf = vec![0; 2];
+        let mut buf = [0u8; 2];
         time::timeout(timeout, reader.read_exact(&mut buf)).await??;
-        let len = u16::from_le_bytes(buf.try_into().unwrap());
+        let len = u16::from_le_bytes(buf);
         let mut buf = vec![0; len as usize];
         time::timeout(timeout, reader.read_exact(&mut buf)).await??;
         let client_name = std::str::from_utf8(&buf)?.to_owned();
@@ -1498,23 +1498,23 @@ impl Broker {
         R: AsyncReadExt + Unpin,
     {
         loop {
-            let mut buf = vec![0; 9];
-            let r_len = reader.read(&mut buf).await?;
+            let mut header_buf = [0u8; 9];
+            let r_len = reader.read(&mut header_buf).await?;
             if r_len == 0 {
                 return Ok(());
             } else if r_len < 9 {
-                time::timeout(timeout, reader.read_exact(&mut buf[r_len..])).await??;
+                time::timeout(timeout, reader.read_exact(&mut header_buf[r_len..])).await??;
             }
-            let flags = buf[4];
+            let flags = header_buf[4];
             if flags == 0 {
                 // OP_NOP
                 trace!("{} ping", client);
                 continue;
             }
-            let op_id = &buf[0..4];
+            let op_id = &header_buf[0..4];
             let op: FrameOp = (flags & 0b0011_1111).try_into()?;
             let qos: QoS = (flags >> 6 & 0b0011_1111).try_into()?;
-            let len = u32::from_le_bytes(buf[5..9].try_into().unwrap());
+            let len = u32::from_le_bytes(header_buf[5..9].try_into().unwrap());
             let mut buf = vec![0; len as usize];
             time::timeout(timeout, reader.read_exact(&mut buf)).await??;
             macro_rules! send_ack {
