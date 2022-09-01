@@ -329,7 +329,7 @@ async fn processor<C, H>(
 {
     while let Ok(frame) = rx.recv().await {
         if frame.kind() == FrameKind::Message {
-            match TryInto::<RpcEvent>::try_into(frame) {
+            match RpcEvent::try_from(frame) {
                 Ok(event) => match event.kind() {
                     RpcEventKind::Notification => {
                         trace!("RPC notification from {}", event.frame().sender());
@@ -594,7 +594,7 @@ impl Rpc for RpcClient {
             unwrap_or_cancel!(unwrap_or_cancel!(c.await));
         }
         let result = rx.await.map_err(Into::<Error>::into)?;
-        if let Ok(e) = TryInto::<RpcError>::try_into(&result) {
+        if let Ok(e) = RpcError::try_from(&result) {
             Err(e)
         } else {
             Ok(result)
