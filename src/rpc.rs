@@ -194,76 +194,72 @@ impl TryFrom<Frame> for RpcEvent {
         let (body, use_header) = frame
             .header()
             .map_or_else(|| (frame.payload(), false), |h| (h, true));
-        if body.is_empty() {
-            Err(Error::data("Empty RPC frame"))
-        } else {
-            macro_rules! check_len {
-                ($len: expr) => {
-                    if body.len() < $len {
-                        return Err(Error::data("Invalid RPC frame"));
-                    }
-                };
+        macro_rules! check_len {
+            ($len: expr) => {
+                if body.len() < $len {
+                    return Err(Error::data("Invalid RPC frame"));
+                }
+            };
+        }
+        match body[0] {
+            RPC_NOTIFICATION => Ok(RpcEvent {
+                kind: RpcEventKind::Notification,
+                frame,
+                payload_pos: if use_header { 0 } else { 1 },
+                payload_end_pos: None,
+                subframe_pos: 0,
+                use_header: false,
+            }),
+            RPC_REQUEST => {
+                check_len!(6);
+                if use_header {
+                    Ok(RpcEvent {
+                        kind: RpcEventKind::Request,
+                        frame,
+                        payload_pos: 0,
+                        payload_end_pos: None,
+                        subframe_pos: 0,
+                        use_header: true,
+                    })
+                } else {
+                    let mut sp = body[5..].splitn(2, |c| *c == 0);
+                    let method = sp.next().ok_or_else(|| Error::data("No RPC method"))?;
+                    let payload_pos = 6 + method.len();
+                    sp.next()
+                        .ok_or_else(|| Error::data("No RPC params block"))?;
+                    Ok(RpcEvent {
+                        kind: RpcEventKind::Request,
+                        frame,
+                        payload_pos,
+                        payload_end_pos: None,
+                        subframe_pos: 0,
+                        use_header: false,
+                    })
+                }
             }
-            match body[0] {
-                RPC_NOTIFICATION => Ok(RpcEvent {
-                    kind: RpcEventKind::Notification,
+            RPC_REPLY => {
+                check_len!(5);
+                Ok(RpcEvent {
+                    kind: RpcEventKind::Reply,
                     frame,
-                    payload_pos: if use_header { 0 } else { 1 },
+                    payload_pos: if use_header { 0 } else { 5 },
                     payload_end_pos: None,
                     subframe_pos: 0,
-                    use_header: false,
-                }),
-                RPC_REQUEST => {
-                    check_len!(6);
-                    if use_header {
-                        Ok(RpcEvent {
-                            kind: RpcEventKind::Request,
-                            frame,
-                            payload_pos: 0,
-                            payload_end_pos: None,
-                            subframe_pos: 0,
-                            use_header: true,
-                        })
-                    } else {
-                        let mut sp = body[5..].splitn(2, |c| *c == 0);
-                        let method = sp.next().ok_or_else(|| Error::data("No RPC method"))?;
-                        let payload_pos = 6 + method.len();
-                        sp.next()
-                            .ok_or_else(|| Error::data("No RPC params block"))?;
-                        Ok(RpcEvent {
-                            kind: RpcEventKind::Request,
-                            frame,
-                            payload_pos,
-                            payload_end_pos: None,
-                            subframe_pos: 0,
-                            use_header: false,
-                        })
-                    }
-                }
-                RPC_REPLY => {
-                    check_len!(5);
-                    Ok(RpcEvent {
-                        kind: RpcEventKind::Reply,
-                        frame,
-                        payload_pos: if use_header { 0 } else { 5 },
-                        payload_end_pos: None,
-                        subframe_pos: 0,
-                        use_header,
-                    })
-                }
-                RPC_ERROR => {
-                    check_len!(7);
-                    Ok(RpcEvent {
-                        kind: RpcEventKind::ErrorReply,
-                        frame,
-                        payload_pos: if use_header { 0 } else { 7 },
-                        payload_end_pos: None,
-                        subframe_pos: 0,
-                        use_header,
-                    })
-                }
-                v => Err(Error::data(format!("Unsupported RPC frame code {}", v))),
+                    use_header,
+                })
             }
+            RPC_ERROR => {
+                check_len!(7);
+                Ok(RpcEvent {
+                    kind: RpcEventKind::ErrorReply,
+                    frame,
+                    payload_pos: if use_header { 0 } else { 7 },
+                    payload_end_pos: None,
+                    subframe_pos: 0,
+                    use_header,
+                })
+            }
+            v => Err(Error::data(format!("Unsupported RPC frame code {}", v))),
         }
     }
 }
@@ -362,15 +358,29 @@ async fn processor<C, H>(
                 error!("empty RPC frame");
                 continue;
             }
+            macro_rules! check_len_bulk {
+                ($src: expr, $len: expr) => {
+                    if $src.len() < $len {
+                        error!("Invalid RPC bulk frame");
+                        break;
+                    }
+                };
+            }
             match body[0] {
                 RPC_NOTIFICATION_BULK => {
-                    // TODO check offsets
+                    if body.len() < 5 {
+                        error!("Invalid RPC bulk frame: missing len");
+                        continue;
+                    }
+                    let event_count = u32::from_le_bytes(body[1..5].try_into().unwrap()) as usize;
                     let payload = frame.payload();
-                    let mut pos = if use_header { 0 } else { 1 };
-                    let mut events = Vec::new();
+                    let mut pos = if use_header { 0 } else { 5 };
+                    let mut events = Vec::with_capacity(event_count);
                     while pos < payload.len() {
+                        check_len_bulk!(payload, pos + 3);
                         let size =
                             u32::from_le_bytes(payload[pos..pos + 4].try_into().unwrap()) as usize;
+                        check_len_bulk!(payload, pos + 3 + size);
                         let event = RpcEvent {
                             kind: RpcEventKind::Notification,
                             frame: frame.clone(),
@@ -381,6 +391,9 @@ async fn processor<C, H>(
                         };
                         events.push(event);
                         pos += 4 + size;
+                    }
+                    if events.len() < event_count {
+                        warn!("truncated RPC bulk frame");
                     }
                     for event in events {
                         trace!("RPC bulk notification from {}", event.frame().sender());
@@ -610,8 +623,10 @@ impl Rpc for RpcClient {
         data: &[Cow<'async_trait>],
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
-        let len = data.iter().map(Cow::len).sum::<usize>();
-        let mut buf = Vec::with_capacity(len + data.len() * 4);
+        let size = data.iter().map(Cow::len).sum::<usize>();
+        let dlen = (data.len() as u32).to_le_bytes();
+        let header = [RPC_NOTIFICATION_BULK, dlen[0], dlen[1], dlen[2], dlen[3]];
+        let mut buf = Vec::with_capacity(size + data.len() * 4);
         for d in data {
             buf.extend((d.len() as u32).to_le_bytes());
             buf.extend(d.as_slice());
@@ -620,12 +635,7 @@ impl Rpc for RpcClient {
         self.client
             .lock()
             .await
-            .zc_send(
-                target,
-                (&[RPC_NOTIFICATION_BULK][..]).into(),
-                buf.into(),
-                qos,
-            )
+            .zc_send(target, (header[..]).into(), buf.into(), qos)
             .await
     }
     async fn call0(
