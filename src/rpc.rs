@@ -21,6 +21,10 @@ pub const RPC_REQUEST: u8 = 0x01;
 pub const RPC_REPLY: u8 = 0x11;
 pub const RPC_ERROR: u8 = 0x12;
 
+pub const RPC_NOTIFICATION_BULK: u8 = 0x40;
+pub const RPC_REQUEST_BULK: u8 = 0x41;
+pub const RPC_REPLY_BULK: u8 = 0x51;
+
 pub const RPC_ERROR_CODE_PARSE: i16 = -32700;
 pub const RPC_ERROR_CODE_INVALID_REQUEST: i16 = -32600;
 pub const RPC_ERROR_CODE_METHOD_NOT_FOUND: i16 = -32601;
@@ -98,6 +102,8 @@ pub struct RpcEvent {
     kind: RpcEventKind,
     frame: Frame,
     payload_pos: usize,
+    payload_end_pos: Option<usize>,
+    subframe_pos: usize,
     use_header: bool,
 }
 
@@ -120,7 +126,11 @@ impl RpcEvent {
     }
     #[inline]
     pub fn payload(&self) -> &[u8] {
-        &self.frame().payload()[self.payload_pos..]
+        if let Some(payload_end_pos) = self.payload_end_pos {
+            &self.frame().payload()[self.payload_pos..payload_end_pos]
+        } else {
+            &self.frame().payload()[self.payload_pos..]
+        }
     }
     /// # Panics
     ///
@@ -148,9 +158,9 @@ impl RpcEvent {
     pub fn method(&self) -> &[u8] {
         if self.use_header {
             let header = self.frame.header.as_ref().unwrap();
-            &header[5..header.len() - 1]
+            &header[self.subframe_pos + 5..header.len() - 1]
         } else {
-            &self.frame().payload()[5..self.payload_pos - 1]
+            &self.frame().payload()[self.subframe_pos + 5..self.payload_pos - 1]
         }
     }
     #[inline]
@@ -165,9 +175,9 @@ impl RpcEvent {
         if self.kind == RpcEventKind::ErrorReply {
             i16::from_le_bytes(
                 if self.use_header {
-                    &self.frame.header().unwrap()[5..7]
+                    &self.frame.header().unwrap()[self.subframe_pos + 5..self.subframe_pos + 7]
                 } else {
-                    &self.frame.payload()[5..7]
+                    &self.frame.payload()[self.subframe_pos + 5..self.subframe_pos + 7]
                 }
                 .try_into()
                 .unwrap(),
@@ -199,6 +209,8 @@ impl TryFrom<Frame> for RpcEvent {
                     kind: RpcEventKind::Notification,
                     frame,
                     payload_pos: if use_header { 0 } else { 1 },
+                    payload_end_pos: None,
+                    subframe_pos: 0,
                     use_header: false,
                 }),
                 RPC_REQUEST => {
@@ -208,6 +220,8 @@ impl TryFrom<Frame> for RpcEvent {
                             kind: RpcEventKind::Request,
                             frame,
                             payload_pos: 0,
+                            payload_end_pos: None,
+                            subframe_pos: 0,
                             use_header: true,
                         })
                     } else {
@@ -220,6 +234,8 @@ impl TryFrom<Frame> for RpcEvent {
                             kind: RpcEventKind::Request,
                             frame,
                             payload_pos,
+                            payload_end_pos: None,
+                            subframe_pos: 0,
                             use_header: false,
                         })
                     }
@@ -230,6 +246,8 @@ impl TryFrom<Frame> for RpcEvent {
                         kind: RpcEventKind::Reply,
                         frame,
                         payload_pos: if use_header { 0 } else { 5 },
+                        payload_end_pos: None,
+                        subframe_pos: 0,
                         use_header,
                     })
                 }
@@ -239,6 +257,8 @@ impl TryFrom<Frame> for RpcEvent {
                         kind: RpcEventKind::ErrorReply,
                         frame,
                         payload_pos: if use_header { 0 } else { 7 },
+                        payload_end_pos: None,
+                        subframe_pos: 0,
                         use_header,
                     })
                 }
@@ -286,6 +306,12 @@ pub trait Rpc {
         data: Cow<'async_trait>,
         qos: QoS,
     ) -> Result<OpConfirm, Error>;
+    async fn notify_bulk(
+        &self,
+        target: &str,
+        data: &[Cow<'async_trait>],
+        qos: QoS,
+    ) -> Result<OpConfirm, Error>;
     /// Call the method, no response is required
     async fn call0(
         &self,
@@ -329,10 +355,35 @@ async fn processor<C, H>(
 {
     while let Ok(frame) = rx.recv().await {
         if frame.kind() == FrameKind::Message {
-            match RpcEvent::try_from(frame) {
-                Ok(event) => match event.kind() {
-                    RpcEventKind::Notification => {
-                        trace!("RPC notification from {}", event.frame().sender());
+            let (body, use_header) = frame
+                .header()
+                .map_or_else(|| (frame.payload(), false), |v| (v, true));
+            if body.is_empty() {
+                error!("empty RPC frame");
+                continue;
+            }
+            match body[0] {
+                RPC_NOTIFICATION_BULK => {
+                    // TODO check offsets
+                    let payload = frame.payload();
+                    let mut pos = if use_header { 0 } else { 1 };
+                    let mut events = Vec::new();
+                    while pos < payload.len() {
+                        let size =
+                            u32::from_le_bytes(payload[pos..pos + 4].try_into().unwrap()) as usize;
+                        let event = RpcEvent {
+                            kind: RpcEventKind::Notification,
+                            frame: frame.clone(),
+                            payload_pos: pos + 5,
+                            payload_end_pos: Some(pos + 5 + size),
+                            subframe_pos: pos + 5,
+                            use_header: false,
+                        };
+                        events.push(event);
+                        pos += 5 + size;
+                    }
+                    for event in events {
+                        trace!("RPC bulk notification from {}", event.frame().sender());
                         if opts.blocking_notifications {
                             handlers.handle_notification(event).await;
                         } else {
@@ -342,85 +393,105 @@ async fn processor<C, H>(
                             });
                         }
                     }
-                    RpcEventKind::Request => {
-                        let id = event.id();
-                        trace!(
-                            "RPC request from {}, id: {}, method: {:?}",
-                            event.frame().sender(),
-                            id,
-                            event.method()
-                        );
-                        let ev = if id > 0 {
-                            Some((event.frame().sender().to_owned(), processor_client.clone()))
-                        } else {
-                            None
-                        };
-                        let h = handlers.clone();
-                        tokio::spawn(async move {
-                            let qos = if event.frame().is_realtime() {
-                                QoS::RealtimeProcessed
+                }
+                _ => match RpcEvent::try_from(frame) {
+                    Ok(event) => match event.kind() {
+                        RpcEventKind::Notification => {
+                            trace!("RPC notification from {}", event.frame().sender());
+                            if opts.blocking_notifications {
+                                handlers.handle_notification(event).await;
                             } else {
-                                QoS::Processed
-                            };
-                            let res = h.handle_call(event).await;
-                            if let Some((target, cl)) = ev {
-                                macro_rules! send_reply {
-                                    ($payload: expr, $result: expr) => {{
-                                        let mut client = cl.lock().await;
-                                        if let Some(result) = $result {
-                                            client
-                                                .zc_send(&target, $payload, result.into(), qos)
-                                                .await
-                                        } else {
-                                            client
-                                                .zc_send(&target, $payload, (&[][..]).into(), qos)
-                                                .await
-                                        }
-                                    }};
-                                }
-                                match res {
-                                    Ok(v) => {
-                                        trace!("Sending RPC reply id {} to {}", id, target);
-                                        let mut payload = Vec::with_capacity(5);
-                                        payload.push(RPC_REPLY);
-                                        payload.extend_from_slice(&id.to_le_bytes());
-                                        let _r = send_reply!(payload.into(), v);
-                                    }
-                                    Err(e) => {
-                                        trace!(
-                                            "Sending RPC error {} reply id {} to {}",
-                                            e.code,
-                                            id,
-                                            target,
-                                        );
-                                        let mut payload = Vec::with_capacity(7);
-                                        payload.push(RPC_ERROR);
-                                        payload.extend_from_slice(&id.to_le_bytes());
-                                        payload.extend_from_slice(&e.code.to_le_bytes());
-                                        let _r = send_reply!(payload.into(), e.data);
-                                    }
-                                }
+                                let h = handlers.clone();
+                                tokio::spawn(async move {
+                                    h.handle_notification(event).await;
+                                });
                             }
-                        });
-                    }
-                    RpcEventKind::Reply | RpcEventKind::ErrorReply => {
-                        let id = event.id();
-                        trace!(
-                            "RPC {} from {}, id: {}",
-                            event.kind(),
-                            event.frame().sender(),
-                            id
-                        );
-                        if let Some(tx) = { calls.lock().remove(&id) } {
-                            let _r = tx.send(event);
-                        } else {
-                            warn!("orphaned RPC response: {}", id);
                         }
+                        RpcEventKind::Request => {
+                            let id = event.id();
+                            trace!(
+                                "RPC request from {}, id: {}, method: {:?}",
+                                event.frame().sender(),
+                                id,
+                                event.method()
+                            );
+                            let ev = if id > 0 {
+                                Some((event.frame().sender().to_owned(), processor_client.clone()))
+                            } else {
+                                None
+                            };
+                            let h = handlers.clone();
+                            tokio::spawn(async move {
+                                let qos = if event.frame().is_realtime() {
+                                    QoS::RealtimeProcessed
+                                } else {
+                                    QoS::Processed
+                                };
+                                let res = h.handle_call(event).await;
+                                if let Some((target, cl)) = ev {
+                                    macro_rules! send_reply {
+                                        ($payload: expr, $result: expr) => {{
+                                            let mut client = cl.lock().await;
+                                            if let Some(result) = $result {
+                                                client
+                                                    .zc_send(&target, $payload, result.into(), qos)
+                                                    .await
+                                            } else {
+                                                client
+                                                    .zc_send(
+                                                        &target,
+                                                        $payload,
+                                                        (&[][..]).into(),
+                                                        qos,
+                                                    )
+                                                    .await
+                                            }
+                                        }};
+                                    }
+                                    match res {
+                                        Ok(v) => {
+                                            trace!("Sending RPC reply id {} to {}", id, target);
+                                            let mut payload = Vec::with_capacity(5);
+                                            payload.push(RPC_REPLY);
+                                            payload.extend_from_slice(&id.to_le_bytes());
+                                            let _r = send_reply!(payload.into(), v);
+                                        }
+                                        Err(e) => {
+                                            trace!(
+                                                "Sending RPC error {} reply id {} to {}",
+                                                e.code,
+                                                id,
+                                                target,
+                                            );
+                                            let mut payload = Vec::with_capacity(7);
+                                            payload.push(RPC_ERROR);
+                                            payload.extend_from_slice(&id.to_le_bytes());
+                                            payload.extend_from_slice(&e.code.to_le_bytes());
+                                            let _r = send_reply!(payload.into(), e.data);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                        RpcEventKind::Reply | RpcEventKind::ErrorReply => {
+                            let id = event.id();
+                            trace!(
+                                "RPC {} from {}, id: {}",
+                                event.kind(),
+                                event.frame().sender(),
+                                id
+                            );
+                            if let Some(tx) = { calls.lock().remove(&id) } {
+                                let _r = tx.send(event);
+                            } else {
+                                warn!("orphaned RPC response: {}", id);
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        error!("{}", e);
                     }
                 },
-                Err(e) => {
-                    error!("{}", e);
-                }
             }
         } else if opts.blocking_frames {
             handlers.handle_frame(frame).await;
@@ -530,6 +601,31 @@ impl Rpc for RpcClient {
             .lock()
             .await
             .zc_send(target, (&[RPC_NOTIFICATION][..]).into(), data, qos)
+            .await
+    }
+    #[inline]
+    async fn notify_bulk(
+        &self,
+        target: &str,
+        data: &[Cow<'async_trait>],
+        qos: QoS,
+    ) -> Result<OpConfirm, Error> {
+        let len = data.iter().map(Cow::len).sum::<usize>();
+        let mut buf = Vec::with_capacity(len + data.len() * 4);
+        for d in data {
+            buf.extend((d.len() as u32).to_le_bytes());
+            buf.extend(d.as_slice());
+        }
+        // TODO implement client mentod to send blocks one-by-one with len pfx
+        self.client
+            .lock()
+            .await
+            .zc_send(
+                target,
+                (&[RPC_NOTIFICATION_BULK][..]).into(),
+                buf.into(),
+                qos,
+            )
             .await
     }
     async fn call0(
