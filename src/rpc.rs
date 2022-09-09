@@ -374,13 +374,13 @@ async fn processor<C, H>(
                         let event = RpcEvent {
                             kind: RpcEventKind::Notification,
                             frame: frame.clone(),
-                            payload_pos: pos + 5,
-                            payload_end_pos: Some(pos + 5 + size),
-                            subframe_pos: pos + 5,
+                            payload_pos: pos + 4,
+                            payload_end_pos: Some(pos + 4 + size),
+                            subframe_pos: pos + 4,
                             use_header: false,
                         };
                         events.push(event);
-                        pos += 5 + size;
+                        pos += 4 + size;
                     }
                     for event in events {
                         trace!("RPC bulk notification from {}", event.frame().sender());
