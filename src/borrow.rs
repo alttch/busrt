@@ -40,6 +40,7 @@ impl<'a> From<&'a [u8]> for Cow<'a> {
 }
 
 impl<'a> Cow<'a> {
+    #[inline]
     pub fn as_slice(&self) -> &[u8] {
         match self {
             Cow::Borrowed(v) => v,
@@ -47,6 +48,7 @@ impl<'a> Cow<'a> {
             Cow::Referenced(v) => v.as_slice(),
         }
     }
+    #[inline]
     pub fn to_vec(self) -> Vec<u8> {
         match self {
             Cow::Borrowed(v) => v.to_vec(),
@@ -54,6 +56,7 @@ impl<'a> Cow<'a> {
             Cow::Referenced(v) => v.to_vec(),
         }
     }
+    #[inline]
     pub fn len(&self) -> usize {
         match self {
             Cow::Borrowed(v) => v.len(),
@@ -61,6 +64,7 @@ impl<'a> Cow<'a> {
             Cow::Referenced(v) => v.len(),
         }
     }
+    #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
             Cow::Borrowed(v) => v.is_empty(),
