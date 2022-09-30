@@ -52,7 +52,7 @@ The best idea possible.
 Secondary clients
 =================
 
-To solve the above and some other blocking problems, ELBUS gives a powerful
+To solve the above and some other blocking problems, BUS/RT gives a powerful
 tool: secondary clients.
 
 When a client is registered with a name "NAME%%SFX", it is considered by the
@@ -104,7 +104,7 @@ client object:
 
 .. code::
 
-    let client = Client::connect(&Config::new("path/to/elbus/socket",
+    let client = Client::connect(&Config::new("path/to/busrt/socket",
         "client1")).await.unwrap();
     let secondary_client = client.register_secondary().await.unwrap();
 
@@ -114,7 +114,7 @@ disconnected or dropped.
 Handling frames
 ~~~~~~~~~~~~~~~
 
-ELBUS frames and events have two methods to identify the frame/event sender:
+BUS/RT frames and events have two methods to identify the frame/event sender:
 
 * **frame.sender()** returns the full peer client name, including secondary
   sender suffix. Must be used for RPC replies etc., where it is important to

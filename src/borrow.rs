@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// Example:
 ///
 /// ```rust
-/// use elbus::borrow::Cow;
+/// use busrt::borrow::Cow;
 ///
 /// let owned_payload: Cow = vec![0u8, 1, 2, 3].into();
 /// let borrowed_payload: Cow = vec![0u8, 1, 2, 3].as_slice().into();

@@ -1,0 +1,26 @@
+{
+  "name": "busrt",
+  "version": "0.1.1",
+  "description": "javascript client for BUS/RT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alttch/busrt.git"
+  },
+  "main": "src/busrt.js",
+  "keywords": [
+    "busrt",
+    "ipc",
+    "pubsub",
+    "broker"
+  ],
+  "author": "Bohemia Automation / Altertech",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/alttch/busrt/issues"
+  },
+  "dependencies": {
+    "async-mutex": "^0.3.2",
+    "promise-socket": "^7.0.0",
+    "sleep-promise": "^9.1.0"
+  }
+}

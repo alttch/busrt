@@ -3,10 +3,10 @@
 /// use client_rpc example to test client/server, don't forget to launch a standalone broker server
 /// instance
 use async_trait::async_trait;
-use elbus::client::AsyncClient;
-use elbus::ipc::{Client, Config};
-use elbus::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
-use elbus::{Frame, QoS};
+use busrt::client::AsyncClient;
+use busrt::ipc::{Client, Config};
+use busrt::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
+use busrt::{Frame, QoS};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::atomic;
@@ -73,7 +73,7 @@ impl RpcHandlers for MyHandlers {
 async fn main() {
     let name = "test.client.rpc";
     // create a new client instance
-    let config = Config::new("/tmp/elbus.sock", name);
+    let config = Config::new("/tmp/busrt.sock", name);
     let mut client = Client::connect(&config).await.unwrap();
     // subscribe the cclient to all topics to print publish frames when received
     let opc = client

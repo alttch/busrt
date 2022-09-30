@@ -1,17 +1,17 @@
-ELBUS - Rust-native IPC broker
+BUS/RT - Rust-native IPC broker
 ==============================
 
-What is ELBUS
+What is BUS/RT
 -------------
 
-ELBUS is a rust-native IPC broker, written in Rust/Tokio, inspired by `zeromq
-<https://zeromq.org>`_ and `nanomsg <https://nanomsg.org>`_. ELBUS is fast,
+BUS/RT is a rust-native IPC broker, written in Rust/Tokio, inspired by `zeromq
+<https://zeromq.org>`_ and `nanomsg <https://nanomsg.org>`_. BUS/RT is fast,
 flexible and very easy to use.
 
 The library can be embedded in any Rust project or be used as a
 standalone server.
 
-Code repository: https://github.com/alttch/elbus
+Code repository: https://github.com/alttch/busrt
 
 Inter-process communication
 ---------------------------
@@ -43,7 +43,7 @@ Crate features
 QoS
 ---
 
-ELBUS frames have 4 types of QoS:
+BUS/RT frames have 4 types of QoS:
 
 * No (0) - does not need confirmation, non-real-time
 * Processed (1) - needs confirmation from the broker, non-real-time
@@ -69,10 +69,10 @@ sent after and the buffer is flushed automatically.
     :caption: Bindings
     :maxdepth: 1
 
-    Rust client/broker <https://docs.rs/elbus>
-    Python client (sync) <python/elbus>
-    Python client (async) <python/elbus_async>
-    Javascript client <https://www.npmjs.com/package/elbus>
+    Rust client/broker <https://docs.rs/busrt>
+    Python client (sync) <python/busrt>
+    Python client (async) <python/busrt_async>
+    Javascript client <https://www.npmjs.com/package/busrt>
 
 Performance tips
 ----------------

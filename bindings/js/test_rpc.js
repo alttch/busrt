@@ -4,7 +4,7 @@
 const msgpack = require("msgpackr");
 const sleep = require("sleep-promise");
 
-const elbus = require("elbus");
+const busrt = require("./busrt/src/busrt.js");
 
 // RPC notification handler
 async function on_notification(ev) {
@@ -17,9 +17,9 @@ async function on_call(ev) {
   if (method == "test") {
     return msgpack.pack({ ok: true });
   } else if (method == "err") {
-    throw new elbus.RpcError(-777, "test error");
+    throw new busrt.RpcError(-777, "test error");
   } else {
-    throw new elbus.RpcError(elbus.RPC_ERROR_CODE_METHOD_NOT_FOUND);
+    throw new busrt.RpcError(busrt.RPC_ERROR_CODE_METHOD_NOT_FOUND);
   }
 }
 
@@ -30,27 +30,27 @@ async function on_frame(frame) {
 
 async function main() {
   // create and connect a new client
-  let bus = new elbus.Client("js");
-  await bus.connect("/tmp/elbus.sock");
+  let bus = new busrt.Client("js");
+  await bus.connect("/tmp/busrt.sock");
   // init RPC layer
-  let rpc = new elbus.Rpc(bus);
+  let rpc = new busrt.Rpc(bus);
   // init RPC handlers if incoming event handling is required
   rpc.on_notification = on_notification;
   rpc.on_call = on_call;
   rpc.on_frame = on_frame;
   // send test notification
-  await rpc.notify("target", new elbus.RpcNotification("hello"));
+  await rpc.notify("target", new busrt.RpcNotification("hello"));
   let payload = { test: 123 };
   // call rpc test method, no response required
   await rpc.call0(
     "target",
-    new elbus.RpcRequest("test", msgpack.pack(payload))
+    new busrt.RpcRequest("test", msgpack.pack(payload))
   );
   // call rpc test method and wait for the response
   try {
     let request = await rpc.call(
       "target",
-      new elbus.RpcRequest("test", msgpack.pack(payload))
+      new busrt.RpcRequest("test", msgpack.pack(payload))
     );
     let result = await request.wait_completed();
     console.log(result.get_payload().toString());

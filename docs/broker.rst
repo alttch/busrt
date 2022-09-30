@@ -3,13 +3,13 @@ Broker
 
 .. contents::
 
-The broker is the central elbus instance, which routes messages between
+The broker is the central busrt instance, which routes messages between
 applications. Being the broker is the only way to exchange messages between
 local threads, so usually the broker is embedded into the central heaviest
 application, while all plug-ins, services and additional components talk with
 the broker using inter-process communications (UNIX sockets or TCP).
 
-elbus broker is currently implemented in Rust only.
+busrt broker is currently implemented in Rust only.
 
 Broker API
 ==========
@@ -73,7 +73,7 @@ connect. The clients can be restricted to:
 
 Important things to know:
 
-* *elbus::broker::AaaMap* is a mutex-protected HashMap, which can be modified
+* *busrt::broker::AaaMap* is a mutex-protected HashMap, which can be modified
   on-the-flow
 
 * when a client is connected, its AAA settings are CLONED and not affected with

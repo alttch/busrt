@@ -2,11 +2,11 @@ use async_trait::async_trait;
 use atty::Stream;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use elbus::client::AsyncClient;
-use elbus::common::{BrokerInfo, BrokerStats, ClientList};
-use elbus::ipc::{Client, Config};
-use elbus::rpc::{DummyHandlers, Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
-use elbus::{empty_payload, Error, Frame, QoS};
+use busrt::client::AsyncClient;
+use busrt::common::{BrokerInfo, BrokerStats, ClientList};
+use busrt::ipc::{Client, Config};
+use busrt::rpc::{DummyHandlers, Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
+use busrt::{empty_payload, Error, Frame, QoS};
 use log::{error, info};
 use num_format::{Locale, ToFormattedString};
 use serde_value::Value;
@@ -122,7 +122,7 @@ enum Command {
 }
 
 #[derive(Parser)]
-#[clap(version = elbus::VERSION, author = elbus::AUTHOR)]
+#[clap(version = busrt::VERSION, author = busrt::AUTHOR)]
 struct Opts {
     #[clap(name = "socket path or host:port")]
     path: String,
@@ -351,7 +351,7 @@ async fn create_client(opts: &Opts, name: &str) -> Client {
         .timeout(Duration::from_secs_f32(opts.timeout));
     Client::connect(&config)
         .await
-        .expect("Unable to connect to the elbus broker")
+        .expect("Unable to connect to the busrt broker")
 }
 
 macro_rules! bm_finish {
@@ -578,7 +578,7 @@ async fn main() {
                 Vec::new()
             } else {
                 let s = $c.params.iter().map(String::as_str).collect::<Vec<&str>>();
-                rmp_serde::to_vec_named(&elbus::common::str_to_params_map(&s).unwrap()).unwrap()
+                rmp_serde::to_vec_named(&busrt::common::str_to_params_map(&s).unwrap()).unwrap()
             };
             (rpc, payload)
         }};

@@ -1,5 +1,5 @@
-ELBUS RPC layer specification
-*****************************
+BUS/RT RPC layer specification
+******************************
 
 .. contents::
 
@@ -53,4 +53,4 @@ broadcasts and topics are processed as-is.
 Error codes
 -----------
 
-The standard codes are sent as i16, in the format "-32000 - ELBUS_ERROR_CODE".
+The standard codes are sent as i16, in the format "-32000 - BUS_ERROR_CODE".

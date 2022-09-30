@@ -1,30 +1,24 @@
-# ELBUS - Rust-native IPC broker
+# BUS/RT - Rust-native IPC broker
 
-<img src="https://raw.githubusercontent.com/alttch/elbus/main/docs/images/logo-dark.svg"
+<img src="https://raw.githubusercontent.com/alttch/busrt/main/docs/images/logo-dark.svg"
 width="200" />
 
-<https://elbus.bma.ai/>
+## What is BUS/RT
 
-## What is ELBUS
-
-ELBUS is a rust-native IPC broker, written in Rust/Tokio, inspired by
+BUS/RT® is a rust-native IPC broker, written in Rust/Tokio, inspired by
 [NATS](https://nats.io), [ZeroMQ](https://zeromq.org) and
-[Nanomsg](https://nanomsg.org). ELBUS is fast, flexible and very easy to use.
+[Nanomsg](https://nanomsg.org). BUS/RT is fast, flexible and very easy to use.
 
 The library can be embedded in any Rust project or be used as a standalone
 server.
 
-NOTE: ELBUS is not officially released yet and SDK can be changed at any time
-without any backward compatibility. ELBUS (stands actually for "EVA ICS Local
+NOTE: BUS/RT is not officially released yet and SDK can be changed at any time
+without any backward compatibility. BUS/RT (stands actually for "EVA ICS Local
 Bus") is the key component of [EVA ICS](https://www.eva-ics.com/) v4, which is
 going to be released in 2022-2023.
 
-The name "ELBUS" is also only the working one, after the official release the
+The name "BUS/RT" is also only the working one, after the official release the
 bus will be renamed, as well as its crates, bindings and modules.
-
-## Documentation
-
-Available at <https://elbus.readthedocs.io/>
 
 ## Inter-process communication
 
@@ -40,13 +34,13 @@ The following channels are supported:
 * UNIX sockets (local machine)
 * TCP sockets
 
-In addition to Rust, ELBUS has also bindings for the following languages:
+In addition to Rust, BUS/RT has also bindings for the following languages:
 
-* Python (sync): <https://pypi.org/project/elbus/>
-* Python (async): <https://pypi.org/project/elbus-async/>
-* JavaScript (Node.js): <https://www.npmjs.com/package/elbus>
+* Python (sync): <https://pypi.org/project/busrt/>
+* Python (async): <https://pypi.org/project/busrt-async/>
+* JavaScript (Node.js): <https://www.npmjs.com/package/busrt>
 
-Rust crate: <https://crates.io/crates/elbus>
+Rust crate: <https://crates.io/crates/busrt>
 
 ### Client registration
 
@@ -79,8 +73,8 @@ communications.
 
 ## Security and reliability model
 
-ELBUS has a very simple optional security model in favor of simplicity and
-speed. Also, ELBUS is not designed to work via unstable connections, all
+BUS/RT has a very simple optional security model in favor of simplicity and
+speed. Also, BUS/RT is not designed to work via unstable connections, all
 clients should be connected either from the local machine or using high-speed
 reliable local network communications.
 
@@ -89,11 +83,11 @@ If you need a pub/sub server for a wide area network, try
 
 ## Examples
 
-See [examples](https://github.com/alttch/elbus/tree/main/examples) folder.
+See [examples](https://github.com/alttch/busrt/tree/main/examples) folder.
 
 ## Build a stand-alone server
 
-```
+```ignore
 cargo build --features server,rpc
 ```
 

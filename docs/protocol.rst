@@ -1,4 +1,4 @@
-elbus protocol specification
+busrt protocol specification
 ****************************
 
 Greetings

@@ -50,7 +50,7 @@ pub const SECONDARY_SEP: &str = "%%";
 /// Example:
 ///
 /// ```rust,ignore
-/// use elbus::QoS;
+/// use busrt::QoS;
 ///
 /// let result = client.send("target", payload, QoS::Processed).await.unwrap(); // get send result
 /// let confirm = result.unwrap(); // get OpConfirm
@@ -201,13 +201,13 @@ impl Error {
     }
 }
 
-pub trait IntoElbusResult {
-    fn to_elbus_result(self) -> Result<(), Error>;
+pub trait IntoBusRtResult {
+    fn to_busrt_result(self) -> Result<(), Error>;
 }
 
-impl IntoElbusResult for u8 {
+impl IntoBusRtResult for u8 {
     #[inline]
-    fn to_elbus_result(self) -> Result<(), Error> {
+    fn to_busrt_result(self) -> Result<(), Error> {
         if self == RESPONSE_OK {
             Ok(())
         } else {

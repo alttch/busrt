@@ -9,7 +9,7 @@
 /// test2 is allowed to send direct messages to "test" only and publish to subtopics of "news"
 ///
 /// The broker force-disconnects the client named "test2" every 5 seconds
-use elbus::broker::{AaaMap, Broker, ClientAaa, ServerConfig};
+use busrt::broker::{AaaMap, Broker, ClientAaa, ServerConfig};
 use ipnetwork::IpNetwork;
 use std::time::Duration;
 use tokio::time::sleep;

@@ -1,10 +1,10 @@
 [package]
-name = "elbus"
-version = "0.2.20"
+name = "busrt"
+version = "0.3.0"
 edition = "2021"
 authors = ["Sergei S. <div@altertech.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/alttch/elbus"
+repository = "https://github.com/alttch/busrt"
 description = "Local and network IPC bus"
 readme = "README.md"
 keywords = ["bus", "ipc", "pubsub"]
@@ -64,16 +64,16 @@ std-alloc = []
 tracing = ["tokio/tracing", "console-subscriber"]
 
 [lib]
-name = "elbus"
+name = "busrt"
 path = "src/lib.rs"
 
 [[bin]]
-name = "elbusd"
+name = "busrtd"
 path = "src/server.rs"
 required-features = ["server"]
 
 [[bin]]
-name = "elbus"
+name = "busrt"
 path = "src/cli.rs"
 required-features = ["cli"]
 

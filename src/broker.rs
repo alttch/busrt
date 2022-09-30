@@ -59,7 +59,7 @@ macro_rules! pretty_error {
     };
 }
 
-type BrokerClient = Arc<ElbusClient>;
+type BrokerClient = Arc<BusRtClient>;
 
 macro_rules! make_confirm_channel {
     ($qos: expr) => {
@@ -76,7 +76,7 @@ macro_rules! make_confirm_channel {
 macro_rules! safe_send_frame {
     ($db: expr, $tgt: expr, $frame: expr, $timeout: expr) => {
         if $tgt.tx.is_full() {
-            if $tgt.kind == ElbusClientKind::Internal {
+            if $tgt.kind == BusRtClientKind::Internal {
                 if let Some(timeout) = $timeout {
                     warn!(
                         "internal client {} queue is full, blocking for {:?}",
@@ -108,7 +108,7 @@ macro_rules! send {
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-        trace!("elbus message from {} to {}", $client, $target);
+        trace!("bus/rt message from {} to {}", $client, $target);
         let client = {
             $db.clients.read().unwrap().get($target).map(|c| {
                 c.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
@@ -142,7 +142,7 @@ macro_rules! send_broadcast {
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-        trace!("elbus broadcast message from {} to {}", $client, $target);
+        trace!("bus/rt broadcast message from {} to {}", $client, $target);
         #[allow(clippy::mutable_key_type)]
         let subs = { $db.broadcasts.read().unwrap().get_clients_by_mask($target) };
         if !subs.is_empty() {
@@ -175,7 +175,7 @@ macro_rules! publish {
         $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
         $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
         $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-        trace!("elbus topic publish from {} to {}", $client, $topic);
+        trace!("bus/rt topic publish from {} to {}", $client, $topic);
         #[allow(clippy::mutable_key_type)]
         let subs = { $db.subscriptions.read().unwrap().get_subscribers($topic) };
         if !subs.is_empty() {
@@ -203,7 +203,7 @@ macro_rules! publish {
 
 pub struct Client {
     name: String,
-    client: Arc<ElbusClient>,
+    client: Arc<BusRtClient>,
     db: Arc<BrokerDb>,
     rx: Option<EventChannel>,
     secondary_counter: atomic::AtomicUsize,
@@ -399,30 +399,30 @@ impl Drop for Client {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum ElbusClientKind {
+enum BusRtClientKind {
     Internal,
     LocalIpc,
     Tcp,
 }
 
-impl ElbusClientKind {
+impl BusRtClientKind {
     #[allow(dead_code)]
     fn as_str(&self) -> &str {
         match self {
-            ElbusClientKind::Internal => "internal",
-            ElbusClientKind::LocalIpc => "local_ipc",
-            ElbusClientKind::Tcp => "tcp",
+            BusRtClientKind::Internal => "internal",
+            BusRtClientKind::LocalIpc => "local_ipc",
+            BusRtClientKind::Tcp => "tcp",
         }
     }
 }
 
 #[allow(dead_code)]
 #[derive(Debug)]
-struct ElbusClient {
+struct BusRtClient {
     name: String,
     digest: submap::digest::Sha256Digest,
     primary_name: String,
-    kind: ElbusClientKind,
+    kind: BusRtClientKind,
     source: Option<String>,
     port: Option<String>,
     disconnect_trig: triggered::Trigger,
@@ -436,18 +436,18 @@ struct ElbusClient {
     secondaries: parking_lot::Mutex<HashSet<String>>,
 }
 
-impl fmt::Display for ElbusClient {
+impl fmt::Display for BusRtClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
     }
 }
 
-impl ElbusClient {
+impl BusRtClient {
     pub fn new(
         name: &str,
         primary_name: &str,
         queue_size: usize,
-        kind: ElbusClientKind,
+        kind: BusRtClientKind,
         source: Option<String>,
         port: Option<String>,
     ) -> (Self, EventChannel, triggered::Listener) {
@@ -479,25 +479,25 @@ impl ElbusClient {
     }
 }
 
-impl PartialEq for ElbusClient {
+impl PartialEq for BusRtClient {
     fn eq(&self, other: &Self) -> bool {
         self.digest == other.digest
     }
 }
 
-impl Ord for ElbusClient {
+impl Ord for BusRtClient {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.digest.cmp(&other.digest)
     }
 }
 
-impl PartialOrd for ElbusClient {
+impl PartialOrd for BusRtClient {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Eq for ElbusClient {}
+impl Eq for BusRtClient {}
 
 #[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone)]
@@ -614,7 +614,7 @@ impl BrokerDb {
         Ok(())
     }
     #[inline]
-    async fn register_client(&self, client: Arc<ElbusClient>) -> Result<(), Error> {
+    async fn register_client(&self, client: Arc<BusRtClient>) -> Result<(), Error> {
         #[cfg(feature = "rpc")]
         // copy name for the announce
         let name = client.name.clone();
@@ -629,7 +629,7 @@ impl BrokerDb {
         }
         Ok(())
     }
-    fn insert_client(&self, client: Arc<ElbusClient>) -> Result<(), Error> {
+    fn insert_client(&self, client: Arc<BusRtClient>) -> Result<(), Error> {
         let mut clients = self.clients.write().unwrap();
         let primary_client = if client.primary {
             None
@@ -666,7 +666,7 @@ impl BrokerDb {
     }
     fn trigger_disconnect(&self, name: &str) -> Result<(), Error> {
         if let Some(client) = self.clients.read().unwrap().get(name) {
-            if client.kind == ElbusClientKind::Internal {
+            if client.kind == BusRtClientKind::Internal {
                 Err(Error::not_supported("the client is internal"))
             } else {
                 client.disconnect_trig.trigger();
@@ -677,7 +677,7 @@ impl BrokerDb {
         }
     }
     #[inline]
-    async fn unregister_client(&self, client: &Arc<ElbusClient>) {
+    async fn unregister_client(&self, client: &Arc<BusRtClient>) {
         self.drop_client(client);
         #[cfg(feature = "rpc")]
         if client.primary {
@@ -686,7 +686,7 @@ impl BrokerDb {
             }
         }
     }
-    fn drop_client(&self, client: &Arc<ElbusClient>) {
+    fn drop_client(&self, client: &Arc<BusRtClient>) {
         self.subscriptions
             .write()
             .unwrap()
@@ -701,7 +701,7 @@ impl BrokerDb {
             for secondary in secondaries.iter() {
                 let sec = self.clients.read().unwrap().get(secondary).cloned();
                 if let Some(sec) = sec {
-                    if sec.kind != ElbusClientKind::Internal {
+                    if sec.kind != BusRtClientKind::Internal {
                         sec.disconnect_trig.trigger();
                     }
                     self.drop_client(&sec);
@@ -1018,7 +1018,7 @@ macro_rules! spawn_server {
             loop {
                 match $listener.accept().await {
                     Ok((stream, addr)) => {
-                        trace!("elbus client connected from {:?} to {}", addr, socket_path);
+                        trace!("bus/rt client connected from {:?} to {}", addr, socket_path);
                         if let Err(e) = $prepare(&stream) {
                             error!("{}", e);
                             continue;
@@ -1075,7 +1075,7 @@ where
     aaa_map: Option<AaaMap>,
     ip: ClientIp,
     queue_size: usize,
-    kind: ElbusClientKind,
+    kind: BusRtClientKind,
     source: Option<String>,
     source_port: Option<String>,
 }
@@ -1155,11 +1155,11 @@ impl Broker {
         let client_primary_name = name
             .find(SECONDARY_SEP)
             .map_or_else(|| name, |pos| &name[..pos]);
-        let (c, rx, _) = ElbusClient::new(
+        let (c, rx, _) = BusRtClient::new(
             name,
             client_primary_name,
             self.queue_size,
-            ElbusClientKind::Internal,
+            BusRtClientKind::Internal,
             None,
             None,
         );
@@ -1214,7 +1214,7 @@ impl Broker {
             path,
             listener,
             config,
-            ElbusClientKind::LocalIpc,
+            BusRtClientKind::LocalIpc,
             prepare_unix_stream,
             prepare_unix_source
         );
@@ -1231,7 +1231,7 @@ impl Broker {
             path,
             listener,
             config,
-            ElbusClientKind::Tcp,
+            BusRtClientKind::Tcp,
             prepare_tcp_stream,
             prepare_tcp_source
         );
@@ -1423,7 +1423,7 @@ impl Broker {
             None
         };
         let (client, rx, disconnect_listener) = {
-            let (c, rx, disconnect_listener) = ElbusClient::new(
+            let (c, rx, disconnect_listener) = BusRtClient::new(
                 &client_name,
                 client_primary_name,
                 queue_size,
@@ -1439,14 +1439,14 @@ impl Broker {
             write_and_flush!(&[RESPONSE_OK]);
             (client, rx, disconnect_listener)
         };
-        debug!("elbus client registered: {}", client_name);
+        debug!("bus/rt client registered: {}", client_name);
         let pinger_fut = Self::handle_pinger(&client_name, client.tx.clone(), timeout);
         let reader_fut = Self::handle_reader(&db, client.clone(), &mut reader, timeout, aaa);
         let writer_fut = Self::handle_writer(rx, &mut writer, timeout);
         macro_rules! finish_peer {
             () => {
                 db.unregister_client(&client).await;
-                debug!("elbus client disconnected: {}", client_name);
+                debug!("bus/rt client disconnected: {}", client_name);
             };
         }
         tokio::select! {
@@ -1489,7 +1489,7 @@ impl Broker {
     #[allow(clippy::too_many_lines)]
     async fn handle_reader<R>(
         db: &BrokerDb,
-        client: Arc<ElbusClient>,
+        client: Arc<BusRtClient>,
         reader: &mut R,
         timeout: Duration,
         aaa: Option<ClientAaa>,
@@ -1575,7 +1575,7 @@ impl Broker {
                         let mut sdb = db.subscriptions.write().unwrap();
                         for t in topics {
                             sdb.subscribe(t, &client);
-                            trace!("elbus client {} subscribed to topic {}", client, t);
+                            trace!("bus/rt client {} subscribed to topic {}", client, t);
                         }
                     }
                     if qos.needs_ack() {
@@ -1596,7 +1596,7 @@ impl Broker {
                         for t in sp {
                             let topic = std::str::from_utf8(t)?;
                             sdb.unsubscribe(topic, &client);
-                            trace!("elbus client {} unsubscribed from topic {}", client, topic);
+                            trace!("bus/rt client {} unsubscribed from topic {}", client, topic);
                         }
                     }
                     if qos.needs_ack() {

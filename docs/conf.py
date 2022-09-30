@@ -27,8 +27,8 @@ from pathlib import Path
 mypath = Path().absolute().parent
 
 sys.path.insert(0, mypath.as_posix())
-sys.path.insert(0, (mypath / 'bindings/python/elbus').as_posix())
-sys.path.insert(0, (mypath / 'bindings/python/elbus_async').as_posix())
+sys.path.insert(0, (mypath / 'bindings/python/busrt').as_posix())
+sys.path.insert(0, (mypath / 'bindings/python/busrt_async').as_posix())
 
 # -- General configuration ------------------------------------------------
 
@@ -73,7 +73,7 @@ templates_path = ['_templates']
 master_doc = 'index'
 
 # General information about the project.
-project = 'elbus'
+project = 'BUS/RT'
 copyright = '2022, Bohemia Automation / AlterTech'
 author = 'Bohemia Automation'
 
@@ -244,7 +244,7 @@ html_show_sourcelink = False
 #html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'elbusdoc'
+htmlhelp_basename = 'busrtdoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 

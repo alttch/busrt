@@ -37,7 +37,7 @@ pub const RPC_ERROR_CODE_INTERNAL: i16 = -32603;
 /// WARNING: when handling frames in blocking mode, it is forbidden to use the current RPC client
 /// directly or with any kind of bounded channels, otherwise the RPC client may get stuck!
 ///
-/// See https://elbus.readthedocs.io/en/latest/rpc_blocking.html
+/// See https://busrt.readthedocs.io/en/latest/rpc_blocking.html
 #[derive(Default, Clone, Debug)]
 pub struct Options {
     blocking_notifications: bool,
@@ -274,7 +274,7 @@ type CallMap = Arc<parking_lot::Mutex<BTreeMap<u32, oneshot::Sender<RpcEvent>>>>
 
 #[async_trait]
 pub trait Rpc {
-    /// When created, elbus client is wrapped with Arc<Mutex<_>> to let it be sent into
+    /// When created, busrt client is wrapped with Arc<Mutex<_>> to let it be sent into
     /// the incoming frames handler future
     ///
     /// This mehtod allows to get the containered-client back, to call its methods directly (manage

@@ -2,7 +2,7 @@ use crate::borrow::Cow;
 use crate::comm::{Flush, TtlBufWriter};
 use crate::Error;
 use crate::EventChannel;
-use crate::IntoElbusResult;
+use crate::IntoBusRtResult;
 use crate::OpConfirm;
 use crate::QoS;
 use crate::GREETINGS;
@@ -156,7 +156,7 @@ macro_rules! send_frame {
         buf.extend_from_slice(&((t.len() + $payload.len() + 1) as u32).to_le_bytes());
         buf.extend_from_slice(t);
         buf.push(0x00);
-        trace!("sending elbus {:?} to {} QoS={:?}", $op, $target, $qos);
+        trace!("sending busrt {:?} to {} QoS={:?}", $op, $target, $qos);
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};
     // zc-send to target or topic
@@ -169,7 +169,7 @@ macro_rules! send_frame {
         buf.extend_from_slice(t);
         buf.push(0x00);
         buf.extend_from_slice($header);
-        trace!("sending elbus {:?} to {} QoS={:?}", $op, $target, $qos);
+        trace!("sending busrt {:?} to {} QoS={:?}", $op, $target, $qos);
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};
     // send w/o a target
@@ -190,7 +190,7 @@ macro_rules! connect_broker {
         let timeout = $timeout.clone();
         let reader_fut = tokio::spawn(async move {
             if let Err(e) = handle_read($reader, tx, timeout, reader_responses).await {
-                error!("elbus client reader error: {}", e);
+                error!("busrt client reader error: {}", e);
             }
             rconn.store(false, atomic::Ordering::SeqCst);
         });
@@ -422,9 +422,9 @@ where
                 let ack_id = u32::from_le_bytes(buf[1..5].try_into().unwrap());
                 let tx_channel = { responses.lock().unwrap().remove(&ack_id) };
                 if let Some(tx) = tx_channel {
-                    let _r = tx.send(buf[5].to_elbus_result());
+                    let _r = tx.send(buf[5].to_busrt_result());
                 } else {
-                    warn!("orphaned elbus op ack {}", ack_id);
+                    warn!("orphaned busrt op ack {}", ack_id);
                 }
             }
             _ => {
