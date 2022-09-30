@@ -12,10 +12,7 @@ BUS/RT® is a rust-native IPC broker, written in Rust/Tokio, inspired by
 The library can be embedded in any Rust project or be used as a standalone
 server.
 
-BUS/RT is the core bus of [EVA ICS v4](https://www.eva-ics.com/)
-
-The name "BUS/RT" is also only the working one, after the official release the
-bus will be renamed, as well as its crates, bindings and modules.
+BUS/RT is the core bus of [EVA ICS v4](https://www.eva-ics.com/).
 
 ## Inter-process communication
 
