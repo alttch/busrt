@@ -5,7 +5,7 @@ width="200" />
 
 ## What is BUS/RT
 
-BUS/RT® is a rust-native IPC broker, written in Rust/Tokio, inspired by
+BUS/RT® is a Rust-native IPC broker, written in Rust/Tokio, inspired by
 [NATS](https://nats.io), [ZeroMQ](https://zeromq.org) and
 [Nanomsg](https://nanomsg.org). BUS/RT is fast, flexible and very easy to use.
 
