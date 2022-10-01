@@ -1,6 +1,6 @@
 # BUS/RT - Rust-native IPC broker
 
-<img src="https://raw.githubusercontent.com/alttch/busrt/main/docs/images/logo-dark.svg"
+<img src="https://raw.githubusercontent.com/alttch/busrt/main/images/logo-dark.svg"
 width="200" />
 
 ## What is BUS/RT
