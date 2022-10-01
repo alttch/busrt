@@ -7,7 +7,7 @@ license = "Apache-2.0"
 repository = "https://github.com/alttch/busrt"
 description = "Local and network IPC bus"
 readme = "README.md"
-keywords = ["bus", "ipc", "pubsub", "bus rt"]
+keywords = ["bus", "rt", "ipc", "pubsub"]
 autoexamples = false
 
 [package.metadata.docs.rs]
