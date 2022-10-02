@@ -9,13 +9,14 @@ async fn main() {
     // create a new client instance
     let config = Config::new("/tmp/busrt.sock", name);
     let mut client = Client::connect(&config).await.unwrap();
-    // subscribe to all topics
+    // publish to a topic
     let opc = client
         .publish("some/topic", "hello".as_bytes().into(), QoS::Processed)
         .await
         .unwrap()
         .unwrap();
     opc.await.unwrap().unwrap();
+    // send a direct message
     let opc = client
         .send(
             "test.client.listener",
@@ -26,6 +27,7 @@ async fn main() {
         .unwrap()
         .unwrap();
     opc.await.unwrap().unwrap();
+    // send a broadcast message
     let opc = client
         .send_broadcast("test.*", "hello everyone".as_bytes().into(), QoS::Processed)
         .await
