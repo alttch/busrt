@@ -25,8 +25,8 @@ The following communication patterns are supported out-of-the-box:
 The following channels are supported:
 
 * async channels between threads/futures (Rust only)
-* UNIX sockets (local machine)
-* TCP sockets
+* UNIX sockets (local machine, Linux/BSD)
+* TCP sockets (Linux/BSD/Windows)
 
 In addition to Rust, BUS/RT has also bindings for the following languages:
 
