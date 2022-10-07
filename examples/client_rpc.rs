@@ -1,9 +1,9 @@
-use elbus::ipc::{Client, Config};
-use elbus::rpc::{DummyHandlers, Rpc, RpcClient};
+use busrt::ipc::{Client, Config};
+use busrt::rpc::{DummyHandlers, Rpc, RpcClient};
 /// Demo of client RPC with no handler, which just calls methods
 ///
 /// use client_rpc_handler example to test client/server
-use elbus::{empty_payload, QoS};
+use busrt::{empty_payload, QoS};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -17,7 +17,7 @@ async fn main() {
     let name = "test.client.123";
     let target = "test.client.rpc";
     // create a new client instance
-    let config = Config::new("/tmp/elbus.sock", name);
+    let config = Config::new("/tmp/busrt.sock", name);
     let client = Client::connect(&config).await.unwrap();
     // create RPC with no handlers
     let rpc = RpcClient::new(client, DummyHandlers {});

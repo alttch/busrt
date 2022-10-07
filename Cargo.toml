@@ -1,13 +1,13 @@
 [package]
-name = "elbus"
-version = "0.2.20"
+name = "busrt"
+version = "0.3.5"
 edition = "2021"
 authors = ["Sergei S. <div@altertech.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/alttch/elbus"
+repository = "https://github.com/alttch/busrt"
 description = "Local and network IPC bus"
 readme = "README.md"
-keywords = ["bus", "ipc", "pubsub"]
+keywords = ["bus", "rt", "ipc", "pubsub"]
 autoexamples = false
 
 [package.metadata.docs.rs]
@@ -25,7 +25,7 @@ syslog = { version = "5.0.0", optional = true }
 chrono = { version = "0.4.19", optional = true }
 colored = { version = "2", optional = true }
 clap = { version = "3.0.7", features = ["derive"], optional = true }
-submap = { version = "0.2.2", optional = true, features = ["digest"] }
+submap = { version = "0.2.3", optional = true, features = ["native-digest"] }
 lazy_static = { version = "1.4.0", optional = true }
 jemallocator = { version = "0.5.0", optional = true }
 fork = { version = "0.1.18", optional = true }
@@ -59,21 +59,22 @@ rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value", "parking_lot"]
 cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark",
       "prettytable-rs", "hostname", "hex", "num-format", "jemallocator",
       "serde_json", "atty"]
+openssl-vendored = ["submap/openssl-vendored"]
 full = ["rpc", "ipc", "broker"]
 std-alloc = []
 tracing = ["tokio/tracing", "console-subscriber"]
 
 [lib]
-name = "elbus"
+name = "busrt"
 path = "src/lib.rs"
 
 [[bin]]
-name = "elbusd"
+name = "busrtd"
 path = "src/server.rs"
 required-features = ["server"]
 
 [[bin]]
-name = "elbus"
+name = "busrt"
 path = "src/cli.rs"
 required-features = ["cli"]
 

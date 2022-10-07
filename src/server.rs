@@ -17,9 +17,9 @@ use tokio::sync::Mutex;
 use tokio::time::sleep;
 
 #[cfg(feature = "rpc")]
-use elbus::broker::BrokerEvent;
+use busrt::broker::BrokerEvent;
 
-use elbus::broker::{Broker, ServerConfig};
+use busrt::broker::{Broker, ServerConfig};
 
 static SERVER_ACTIVE: atomic::AtomicBool = atomic::AtomicBool::new(true);
 
@@ -176,7 +176,7 @@ fn main() {
         let formatter = syslog::Formatter3164 {
             facility: syslog::Facility::LOG_USER,
             hostname: None,
-            process: "elbusd".into(),
+            process: "busrtd".into(),
             pid: 0,
         };
         match syslog::unix(formatter) {
@@ -192,7 +192,7 @@ fn main() {
     }
     let timeout = Duration::from_secs_f64(opts.timeout);
     let buf_ttl = Duration::from_micros(opts.buf_ttl);
-    info!("starting elbus server");
+    info!("starting BUS/RT server");
     info!("workers: {}", opts.workers);
     info!("buf size: {}", opts.buf_size);
     info!("buf ttl: {:?}", buf_ttl);
@@ -261,7 +261,7 @@ fn main() {
         }
         drop(sock_files);
         BROKER.lock().await.replace(broker);
-        info!("elbus broker started");
+        info!("BUS/RT broker started");
         let sleep_step = Duration::from_millis(100);
         loop {
             if !SERVER_ACTIVE.load(atomic::Ordering::SeqCst) {

@@ -1,9 +1,9 @@
 /// Demo of custom broker internal RPC
 use async_trait::async_trait;
-use elbus::broker::{Broker, ServerConfig, BROKER_NAME};
-use elbus::client::AsyncClient;
-use elbus::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
-use elbus::{Frame, QoS};
+use busrt::broker::{Broker, ServerConfig, BROKER_NAME};
+use busrt::client::AsyncClient;
+use busrt::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
+use busrt::{Frame, QoS};
 use serde::Deserialize;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -55,7 +55,7 @@ async fn main() {
     let mut broker = Broker::new();
     // spawn unix server for external clients
     broker
-        .spawn_unix_server("/tmp/elbus.sock", ServerConfig::default())
+        .spawn_unix_server("/tmp/busrt.sock", ServerConfig::default())
         .await
         .unwrap();
     // register the broker core client
@@ -71,8 +71,8 @@ async fn main() {
     // Arc<Mutex<_>> as it is cloned for each fifo spawned and can be got back with core_rpc_client
     // broker method
     broker.set_core_rpc_client(crpc).await;
-    // test it with echo .broker .hello > /tmp/elbus.fifo
-    broker.spawn_fifo("/tmp/elbus.fifo", 8192).await.unwrap();
+    // test it with echo .broker .hello > /tmp/busrt.fifo
+    broker.spawn_fifo("/tmp/busrt.fifo", 8192).await.unwrap();
     // this is the internal client, it will be connected forever
     while broker
         .core_rpc_client()

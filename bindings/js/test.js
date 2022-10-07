@@ -7,10 +7,10 @@
 const ntqdm = require("ntqdm");
 const sleep = require("sleep-promise");
 
-const elbus = require("./elbus/src/elbus.js");
+const busrt = require("./busrt/src/busrt.js");
 
 async function disconnected() {
-  console.log("elbus disconnected");
+  console.log("bus/rt disconnected");
 }
 
 async function on_frame(frame) {
@@ -25,11 +25,11 @@ function* generator(steps) {
 }
 
 async function test() {
-  let bus = new elbus.Client("js");
+  let bus = new busrt.Client("js");
   bus.on_disconnect = disconnected;
   bus.on_frame = on_frame;
   //await bus.connect(("localhost", 9924));
-  await bus.connect("/tmp/elbus.sock");
+  await bus.connect("/tmp/busrt.sock");
   let op = await bus.subscribe(["tests", "xxz"]);
   console.log(await op.wait_completed());
   op = await bus.unsubscribe(["tests", "xxz"]);
@@ -40,7 +40,7 @@ async function test() {
   //}
   //return;
   let iters = 200_000;
-  let msg = new elbus.Frame(elbus.OP_MESSAGE, 0);
+  let msg = new busrt.Frame(busrt.OP_MESSAGE, 0);
   msg.payload = Buffer.from("hello");
   let start = new Date().getTime() / 1000;
   var tdqm = ntqdm();
