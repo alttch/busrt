@@ -392,9 +392,7 @@ impl Client {
 
 impl Drop for Client {
     fn drop(&mut self) {
-        if self.client.registered.load(atomic::Ordering::SeqCst) {
-            self.db.drop_client(&self.client);
-        }
+        self.db.drop_client(&self.client);
     }
 }
 
@@ -561,6 +559,7 @@ struct BrokerDb {
     w_frames: atomic::AtomicU64,
     w_bytes: atomic::AtomicU64,
     startup_time: Instant,
+    force_register: bool,
 }
 
 impl Default for BrokerDb {
@@ -581,6 +580,7 @@ impl Default for BrokerDb {
             w_frames: atomic::AtomicU64::new(0),
             w_bytes: atomic::AtomicU64::new(0),
             startup_time: Instant::now(),
+            force_register: false,
         }
     }
 }
@@ -620,7 +620,23 @@ impl BrokerDb {
         let name = client.name.clone();
         #[cfg(feature = "rpc")]
         let primary = client.primary;
-        self.insert_client(client)?;
+        #[cfg(feature = "rpc")]
+        let allow_force = client.primary && self.force_register;
+        #[cfg(not(feature = "rpc"))]
+        let allow_force = self.force_register;
+        match self.insert_client(client.clone()) {
+            Ok(()) => {}
+            Err(e) if e.kind() == ErrorKind::Busy && allow_force => {
+                let prev_c = self.clients.write().unwrap().remove(&name);
+                if let Some(prev) = prev_c {
+                    warn!("disconnecting previous instance of {}", name);
+                    self.drop_client(&prev);
+                    prev.disconnect_trig.trigger();
+                }
+                self.insert_client(client)?;
+            }
+            Err(e) => return Err(e),
+        }
         #[cfg(feature = "rpc")]
         if primary {
             if let Err(e) = self.announce(BrokerEvent::reg(&name)).await {
@@ -678,38 +694,43 @@ impl BrokerDb {
     }
     #[inline]
     async fn unregister_client(&self, client: &Arc<BusRtClient>) {
+        #[cfg(feature = "rpc")]
+        let was_registered = client.registered.load(atomic::Ordering::SeqCst);
         self.drop_client(client);
         #[cfg(feature = "rpc")]
-        if client.primary {
+        if client.primary && was_registered {
             if let Err(e) = self.announce(BrokerEvent::unreg(&client.name)).await {
                 error!("{}", e);
             }
         }
     }
     fn drop_client(&self, client: &Arc<BusRtClient>) {
-        self.subscriptions
-            .write()
-            .unwrap()
-            .unregister_client(client);
-        self.broadcasts
-            .write()
-            .unwrap()
-            .unregister_client(&client.name, client);
-        self.clients.write().unwrap().remove(&client.name);
-        if client.primary {
-            let mut secondaries = client.secondaries.lock();
-            for secondary in secondaries.iter() {
-                let sec = self.clients.read().unwrap().get(secondary).cloned();
-                if let Some(sec) = sec {
-                    if sec.kind != BusRtClientKind::Internal {
-                        sec.disconnect_trig.trigger();
+        if client.registered.load(atomic::Ordering::SeqCst) {
+            client.registered.store(false, atomic::Ordering::SeqCst);
+            self.subscriptions
+                .write()
+                .unwrap()
+                .unregister_client(client);
+            self.broadcasts
+                .write()
+                .unwrap()
+                .unregister_client(&client.name, client);
+            self.clients.write().unwrap().remove(&client.name);
+            if client.primary {
+                let mut secondaries = client.secondaries.lock();
+                for secondary in secondaries.iter() {
+                    let sec = self.clients.read().unwrap().get(secondary).cloned();
+                    if let Some(sec) = sec {
+                        if sec.kind != BusRtClientKind::Internal {
+                            sec.disconnect_trig.trigger();
+                        }
+                        self.drop_client(&sec);
                     }
-                    self.drop_client(&sec);
                 }
+                secondaries.clear();
+            } else if let Some(primary) = self.clients.read().unwrap().get(&client.primary_name) {
+                primary.secondaries.lock().remove(&client.name);
             }
-            secondaries.clear();
-        } else if let Some(primary) = self.clients.read().unwrap().get(&client.primary_name) {
-            primary.secondaries.lock().remove(&client.name);
         }
     }
 }
@@ -1107,9 +1128,32 @@ impl Default for Broker {
     }
 }
 
+#[derive(Default, Clone)]
+pub struct Options {
+    force_register: bool,
+}
+
+impl Options {
+    pub fn force_register(mut self, force: bool) -> Self {
+        self.force_register = force;
+        self
+    }
+}
+
 impl Broker {
     pub fn new() -> Self {
         Self::default()
+    }
+    pub fn create(opts: &Options) -> Self {
+        let db = BrokerDb {
+            force_register: opts.force_register,
+            ..Default::default()
+        };
+        Self {
+            db: Arc::new(db),
+            services: <_>::default(),
+            queue_size: DEFAULT_QUEUE_SIZE,
+        }
     }
     #[inline]
     pub fn stats(&self) -> BrokerStats {

@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use atty::Stream;
-use clap::{Parser, Subcommand};
-use colored::Colorize;
 use busrt::client::AsyncClient;
 use busrt::common::{BrokerInfo, BrokerStats, ClientList};
 use busrt::ipc::{Client, Config};
 use busrt::rpc::{DummyHandlers, Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use busrt::{empty_payload, Error, Frame, QoS};
+use clap::{Parser, Subcommand};
+use colored::Colorize;
 use log::{error, info};
 use num_format::{Locale, ToFormattedString};
 use serde_value::Value;
@@ -663,9 +663,16 @@ async fn main() {
                 "Listening to messages for {} ...",
                 client_name.cyan().bold()
             );
-            while let Ok(frame) = rx.recv().await {
-                print_frame(&frame).await;
+            let fut = tokio::spawn(async move {
+                while let Ok(frame) = rx.recv().await {
+                    print_frame(&frame).await;
+                }
+            });
+            let sleep_step = Duration::from_millis(100);
+            while client.is_connected() {
+                sleep(sleep_step).await;
             }
+            fut.abort();
         }
         Command::r#Send(ref cmd) => {
             let mut client = create_client(&opts, &client_name).await;

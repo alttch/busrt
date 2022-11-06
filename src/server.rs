@@ -19,7 +19,7 @@ use tokio::time::sleep;
 #[cfg(feature = "rpc")]
 use busrt::broker::BrokerEvent;
 
-use busrt::broker::{Broker, ServerConfig};
+use busrt::broker::{Broker, Options, ServerConfig};
 
 static SERVER_ACTIVE: atomic::AtomicBool = atomic::AtomicBool::new(true);
 
@@ -84,6 +84,11 @@ struct Opts {
     daemonize: bool,
     #[clap(long = "log-syslog", help = "Force log to syslog")]
     log_syslog: bool,
+    #[clap(
+        long = "force-register",
+        help = "Force register new clients with duplicate names"
+    )]
+    force_register: bool,
     #[clap(short = 'w', default_value = "4")]
     workers: usize,
     #[clap(short = 't', default_value = "5", help = "timeout (seconds)")]
@@ -219,7 +224,7 @@ fn main() {
         }
         handle_term_signal!(SignalKind::interrupt(), false);
         handle_term_signal!(SignalKind::terminate(), true);
-        let mut broker = Broker::new();
+        let mut broker = Broker::create(&Options::default().force_register(opts.force_register));
         #[cfg(feature = "rpc")]
         broker.init_default_core_rpc().await.unwrap();
         broker.set_queue_size(opts.queue_size);
