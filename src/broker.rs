@@ -1778,7 +1778,7 @@ impl Broker {
                 let frame_len = extra_len + frame.buf.len() - frame.payload_pos;
                 #[allow(clippy::cast_possible_truncation)]
                 buf.extend_from_slice(&(frame_len as u32).to_le_bytes()); // bytes 1-4
-                buf.push(if frame.realtime { 1 } else { 0 }); // byte 5 - reserved
+                buf.push(u8::from(frame.realtime)); // byte 5 - reserved
                 if let Some(s) = sender {
                     buf.extend_from_slice(s);
                     buf.push(0x00);

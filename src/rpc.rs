@@ -198,7 +198,7 @@ impl TryFrom<Frame> for RpcEvent {
                 RPC_NOTIFICATION => Ok(RpcEvent {
                     kind: RpcEventKind::Notification,
                     frame,
-                    payload_pos: if use_header { 0 } else { 1 },
+                    payload_pos: usize::from(!use_header),
                     use_header: false,
                 }),
                 RPC_REQUEST => {
