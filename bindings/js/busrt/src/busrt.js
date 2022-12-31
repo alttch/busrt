@@ -390,15 +390,17 @@ class Client {
             throw "Invalid bus/rt frame";
           }
           frame.sender = frame.payload.slice(0, i).toString();
+          i += 1; // Move the cursor past the sender's null terminator
+
           if (frame.type == OP_PUBLISH) {
-            let t = frame.payload.indexOf(0);
+            let t = frame.payload.slice(i).indexOf(0);
             if (t == -1) {
               throw "Invalid bus/rt frame";
             }
-            frame.topic = frame.payload.slice(0, t).toString();
-            i += t + 2;
+            frame.topic = frame.payload.slice(i, i+t).toString();
+            i += t + 1; // Move the cursor past the topic's null terminator
           }
-          frame.payload_pos = i + 1;
+          frame.payload_pos = i;
           if (me.on_frame) {
             process.nextTick(() => me.on_frame(frame));
           }
