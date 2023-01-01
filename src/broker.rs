@@ -615,7 +615,6 @@ impl BrokerDb {
     }
     #[inline]
     async fn register_client(&self, client: Arc<BusRtClient>) -> Result<(), Error> {
-        #[cfg(feature = "rpc")]
         // copy name for the announce
         let name = client.name.clone();
         #[cfg(feature = "rpc")]
