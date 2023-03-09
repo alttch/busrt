@@ -131,6 +131,8 @@ impl fmt::Display for Error {
     }
 }
 
+impl std::error::Error for Error {}
+
 impl Error {
     #[inline]
     pub fn new(kind: ErrorKind, message: Option<impl fmt::Display>) -> Self {
