@@ -2,7 +2,7 @@
 ///
 /// use client_rpc example to test client/server, don't forget to launch a standalone broker server
 /// instance
-use async_trait::async_trait;
+use busrt::async_trait;
 use busrt::client::AsyncClient;
 use busrt::ipc::{Client, Config};
 use busrt::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
