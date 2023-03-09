@@ -4,7 +4,7 @@
 //
 // The source can be a database, a HTTP data stream etc.
 //
-// consider there is a local PostreSQL database "tests" with a table "customers" (id bigserial,
+// consider there is a local PostgreSQL database "tests" with a table "customers" (id bigserial,
 // name varchar). The access credentials are tests/xxx
 use busrt::broker::{Broker, ServerConfig};
 use busrt::rpc::{RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
