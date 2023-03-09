@@ -10,8 +10,8 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-/// A helper cursor payload structure, which implements serialize/deserialize with serde
-/// Can be replaced with a custom one
+/// A helper cursor payload structure which implements serialize/deserialize with serde Can be
+/// replaced with a custom one
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct Payload {
     u: uuid::Uuid,
@@ -85,8 +85,8 @@ impl Map {
             Err(RpcError::not_found(None))
         }
     }
-    /// Spawns a background cleaner worker, which automatically removes finished and
-    /// expired cursors from the map
+    /// Spawns a background cleaner worker which automatically removes finished and expired cursors
+    /// from the map
     pub fn spawn_cleaner(&self, interval: Duration) -> JoinHandle<()> {
         let cursors = self.0.clone();
         let mut int = tokio::time::interval(interval);

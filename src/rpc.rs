@@ -28,7 +28,7 @@ pub const RPC_ERROR_CODE_METHOD_NOT_FOUND: i16 = -32601;
 pub const RPC_ERROR_CODE_INVALID_METHOD_PARAMS: i16 = -32602;
 pub const RPC_ERROR_CODE_INTERNAL: i16 = -32603;
 
-/// By default, RPC frame and notification handlers are launched in background, which allows
+/// By default, RPC frame and notification handlers are launched in background which allows
 /// non-blocking event processing, however events can be processed in random order
 ///
 /// RPC options allow to launch handlers in blocking mode. In this case handlers must process

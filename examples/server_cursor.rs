@@ -36,8 +36,8 @@ struct Customer {
 
 // define a cursor for the database stream
 struct CustomerCursor {
-    // futures::Stream object must be under a mutex to implement Sync, which is required for the
-    // RPC server
+    // futures::Stream object must be under a mutex to implement Sync which is required for the RPC
+    // server
     stream: Mutex<DbStream>,
     // a special cursor metadata object, must exist in all cursor structures if busrt::cursors::Map
     // helper object is used
@@ -159,6 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pool,
         cursors: <_>::default(),
     };
+    // spawn a cleaner worker which automatically drops finished and expired cursors
     handlers.cursors.spawn_cleaner(Duration::from_secs(1));
     let _rpc = RpcClient::new(client, handlers);
     loop {

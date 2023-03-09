@@ -1,4 +1,4 @@
-// Demo of client RPC with no handler, which just calls methods
+// Demo of client RPC with no handler which just calls methods
 //
 // use client_rpc_handler example to test client/server
 use busrt::ipc::{Client, Config};
