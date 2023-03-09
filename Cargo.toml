@@ -48,19 +48,17 @@ triggered = { version = "0.1.2", optional = true }
 async-io = "1.8.0"
 parking_lot = { version = "0.12.1", optional = true }
 console-subscriber = { version = "0.1.7", optional = true }
+uuid = { version = "1.3.0", features = ["v4"], optional = true }
 
 [features]
-server = ["log", "syslog", "chrono", "colored", "clap",
-          "lazy_static", "jemallocator", "fork", "broker"]
-broker = ["log", "submap", "async-trait", "unix-named-pipe", "nix",
-          "ipnetwork", "triggered", "parking_lot"]
+server = ["log", "syslog", "chrono", "colored", "clap", "lazy_static", "jemallocator", "fork", "broker"]
+broker = ["log", "submap", "async-trait", "unix-named-pipe", "nix", "ipnetwork", "triggered", "parking_lot"]
 ipc = ["log", "async-trait"]
 rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value", "parking_lot"]
-cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark",
-      "prettytable-rs", "hostname", "hex", "num-format", "jemallocator",
-      "serde_json", "atty"]
+cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark", "prettytable-rs", "hostname", "hex", "num-format", "jemallocator", "serde_json", "atty"]
 openssl-vendored = ["submap/openssl-vendored"]
 full = ["rpc", "ipc", "broker"]
+cursors = ["rpc", "uuid"]
 std-alloc = []
 tracing = ["tokio/tracing", "console-subscriber"]
 

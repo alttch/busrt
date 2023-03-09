@@ -4,6 +4,9 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(feature = "rpc")]
+pub use async_trait::async_trait;
+
 pub const OP_NOP: u8 = 0x00;
 pub const OP_PUBLISH: u8 = 0x01;
 pub const OP_SUBSCRIBE: u8 = 0x02;
@@ -474,6 +477,8 @@ pub mod tools {
 
 #[cfg(feature = "broker")]
 pub mod broker;
+#[cfg(feature = "cursors")]
+pub mod cursors;
 #[cfg(feature = "ipc")]
 pub mod ipc;
 #[cfg(feature = "rpc")]
