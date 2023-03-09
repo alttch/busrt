@@ -90,7 +90,7 @@ impl cursors::Cursor for CustomerCursor {
                 }
             }
         }
-        if result.is_empty() {
+        if result.len() < count {
             // mark the cursor finished if there are no more records
             self.meta.mark_finished();
         }
