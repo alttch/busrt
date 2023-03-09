@@ -132,10 +132,16 @@ impl RpcHandlers for MyHandlers {
                 Ok(Some(rmp_serde::to_vec_named(&cursors::Payload::from(u))?))
             }
             "N" => {
+                // handle cursor-next calls. if all cursors properly implement
+                // busrt::cursors::Cursor trait, it is possible to have a sigle "next" method for
+                // all cursor types.
                 let p: cursors::Payload = rmp_serde::from_slice(payload)?;
                 self.cursors.next(p.uuid()).await
             }
             "NB" => {
+                // handle cursor-next-bulk calls. if all cursors properly implement
+                // busrt::cursors::Cursor trait, it is possible to have a sigle "next-bulk" method
+                // for all cursor types.
                 let p: cursors::Payload = rmp_serde::from_slice(payload)?;
                 self.cursors.next_bulk(p.uuid(), p.bulk_count()).await
             }
