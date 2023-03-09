@@ -67,6 +67,7 @@ fn set_verbose_logger(filter: LevelFilter) {
         .unwrap();
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Parser)]
 struct Opts {
     #[clap(
@@ -125,7 +126,7 @@ async fn terminate(allow_log: bool) {
         if allow_log {
             trace!("removing sock file {}", f);
         }
-        let _r = std::fs::remove_file(&f);
+        let _r = std::fs::remove_file(f);
     }
     if allow_log {
         info!("terminating");

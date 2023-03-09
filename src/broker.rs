@@ -613,6 +613,7 @@ impl BrokerDb {
         }
         Ok(())
     }
+    #[allow(clippy::unused_async)]
     #[inline]
     async fn register_client(&self, client: Arc<BusRtClient>) -> Result<(), Error> {
         // copy name for the announce
@@ -691,6 +692,7 @@ impl BrokerDb {
             Err(Error::not_registered())
         }
     }
+    #[allow(clippy::unused_async)]
     #[inline]
     async fn unregister_client(&self, client: &Arc<BusRtClient>) {
         #[cfg(feature = "rpc")]
