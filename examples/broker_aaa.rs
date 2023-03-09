@@ -15,17 +15,17 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // create a new broker instance
     let mut broker = Broker::new();
-    broker.init_default_core_rpc().await.unwrap();
+    broker.init_default_core_rpc().await?;
     // create AAA map
     let aaa_map = AaaMap::default();
     {
         let mut map = aaa_map.lock();
         map.insert(
             "test".to_owned(),
-            ClientAaa::new().hosts_allow(vec![IpNetwork::V4("127.0.0.0/8".parse().unwrap())]),
+            ClientAaa::new().hosts_allow(vec![IpNetwork::V4("127.0.0.0/8".parse()?)]),
         );
         map.insert(
             "test2".to_owned(),
@@ -39,10 +39,7 @@ async fn main() {
     // put AAA map to the server config
     let config = ServerConfig::new().aaa_map(aaa_map);
     // spawn tcp server for external clients
-    broker
-        .spawn_tcp_server("0.0.0.0:7777", config)
-        .await
-        .unwrap();
+    broker.spawn_tcp_server("0.0.0.0:7777", config).await?;
     // the map can be modified later at any time, however access controls are cached for clients
     // which are already connected
     loop {

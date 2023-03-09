@@ -50,18 +50,17 @@ impl RpcHandlers for MyHandlers {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // create a new broker instance
     let mut broker = Broker::new();
     // spawn unix server for external clients
     broker
         .spawn_unix_server("/tmp/busrt.sock", ServerConfig::default())
-        .await
-        .unwrap();
+        .await?;
     // register the broker core client
-    let mut core_client = broker.register_client(BROKER_NAME).await.unwrap();
+    let mut core_client = broker.register_client(BROKER_NAME).await?;
     // subscribe the core client to all topics to print publish frames when received
-    core_client.subscribe("#", QoS::No).await.unwrap();
+    core_client.subscribe("#", QoS::No).await?;
     // create handlers object
     let handlers = MyHandlers {};
     // create RPC
@@ -72,7 +71,7 @@ async fn main() {
     // broker method
     broker.set_core_rpc_client(crpc).await;
     // test it with echo .broker .hello > /tmp/busrt.fifo
-    broker.spawn_fifo("/tmp/busrt.fifo", 8192).await.unwrap();
+    broker.spawn_fifo("/tmp/busrt.fifo", 8192).await?;
     // this is the internal client, it will be connected forever
     while broker
         .core_rpc_client()
@@ -84,4 +83,5 @@ async fn main() {
     {
         sleep(Duration::from_secs(1)).await;
     }
+    Ok(())
 }

@@ -8,7 +8,7 @@ use busrt::ipc::{Client, Config};
 use busrt::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 use busrt::{Frame, QoS};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::atomic;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -31,12 +31,12 @@ impl RpcHandlers for MyHandlers {
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
         match event.parse_method()? {
             "test" => {
-                let mut payload = HashMap::new();
+                let mut payload = BTreeMap::new();
                 payload.insert("ok", true);
                 Ok(Some(rmp_serde::to_vec_named(&payload)?))
             }
             "get" => {
-                let mut payload = HashMap::new();
+                let mut payload = BTreeMap::new();
                 payload.insert("value", self.counter.load(atomic::Ordering::SeqCst));
                 Ok(Some(rmp_serde::to_vec_named(&payload)?))
             }
@@ -70,19 +70,15 @@ impl RpcHandlers for MyHandlers {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let name = "test.client.rpc";
     // create a new client instance
     let config = Config::new("/tmp/busrt.sock", name);
-    let mut client = Client::connect(&config).await.unwrap();
+    let mut client = Client::connect(&config).await?;
     // subscribe the cclient to all topics to print publish frames when received
-    let opc = client
-        .subscribe("#", QoS::Processed)
-        .await
-        .unwrap()
-        .unwrap();
+    let opc = client.subscribe("#", QoS::Processed).await?.expect("no op");
     // receive operation confirmation
-    opc.await.unwrap().unwrap();
+    opc.await??;
     // create handlers object
     let handlers = MyHandlers {
         counter: atomic::AtomicU64::default(),
@@ -96,4 +92,5 @@ async fn main() {
         // after, the program can try reconnecting or quit
         let _r = rpc.client().lock().await.ping().await;
     }
+    Ok(())
 }
