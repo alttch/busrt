@@ -735,5 +735,7 @@ impl fmt::Display for RpcError {
     }
 }
 
+impl std::error::Error for RpcError {}
+
 #[allow(clippy::module_name_repetitions)]
 pub type RpcResult = Result<Option<Vec<u8>>, RpcError>;
