@@ -1,6 +1,6 @@
 [package]
 name = "busrt"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 authors = ["Sergei S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -11,11 +11,11 @@ keywords = ["bus", "rt", "ipc", "pubsub"]
 autoexamples = false
 
 [package.metadata.docs.rs]
-features = ["broker", "ipc", "rpc"]
+features = ["broker", "ipc", "rpc", "cursors"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.playground]
-features = ["broker", "ipc", "rpc"]
+features = ["broker", "ipc", "rpc", "cursors"]
 
 [dependencies]
 tokio = { version = "1.20.1", features = ["full"] }
