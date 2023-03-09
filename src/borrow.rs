@@ -15,6 +15,7 @@ use std::sync::Arc;
 /// let owned_payload: Cow = vec![0u8, 1, 2, 3].into();
 /// let borrowed_payload: Cow = vec![0u8, 1, 2, 3].as_slice().into();
 /// ```
+#[derive(Clone)]
 pub enum Cow<'a> {
     Borrowed(&'a [u8]),
     Owned(Vec<u8>),
