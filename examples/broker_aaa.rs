@@ -1,14 +1,14 @@
-/// Demo of a broker with AAA
-///
-/// The broker listens on 0.0.0.0:7777
-///
-/// Accepted client names: test (from localhost only), test2 (from any)
-///
-/// test is allowed to do anything
-///
-/// test2 is allowed to send direct messages to "test" only and publish to subtopics of "news"
-///
-/// The broker force-disconnects the client named "test2" every 5 seconds
+// Demo of a broker with AAA
+//
+// The broker listens on 0.0.0.0:7777
+//
+// Accepted client names: test (from localhost only), test2 (from any)
+//
+// test is allowed to do anything
+//
+// test2 is allowed to send direct messages to "test" only and publish to subtopics of "news"
+//
+// The broker force-disconnects the client named "test2" every 5 seconds
 use busrt::broker::{AaaMap, Broker, ClientAaa, ServerConfig};
 use ipnetwork::IpNetwork;
 use std::time::Duration;

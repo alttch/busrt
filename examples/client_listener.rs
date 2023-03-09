@@ -1,4 +1,4 @@
-/// Client demo (listener)
+// Client demo (listener)
 use busrt::client::AsyncClient;
 use busrt::ipc::{Client, Config};
 use busrt::QoS;

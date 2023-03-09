@@ -1,4 +1,4 @@
-/// Demo of custom broker internal RPC
+// Demo of custom broker internal RPC
 use busrt::async_trait;
 use busrt::broker::{Broker, ServerConfig, BROKER_NAME};
 use busrt::client::AsyncClient;

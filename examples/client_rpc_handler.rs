@@ -1,7 +1,7 @@
-/// Demo of client RPC handler
-///
-/// use client_rpc example to test client/server, don't forget to launch a standalone broker server
-/// instance
+// Demo of client RPC handler
+//
+// use client_rpc example to test client/server, don't forget to launch a standalone broker server
+// instance
 use busrt::async_trait;
 use busrt::client::AsyncClient;
 use busrt::ipc::{Client, Config};

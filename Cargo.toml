@@ -48,7 +48,9 @@ triggered = { version = "0.1.2", optional = true }
 async-io = "1.8.0"
 parking_lot = { version = "0.12.1", optional = true }
 console-subscriber = { version = "0.1.7", optional = true }
-uuid = { version = "1.3.0", features = ["v4"], optional = true }
+uuid = { version = "1.3.0", features = ["serde", "v4"], optional = true }
+sqlx = { version = "0.6.2", features = ["postgres", "runtime-tokio-rustls"], optional = true }
+futures = { version = "0.3.26", optional = true }
 
 [features]
 server = ["log", "syslog", "chrono", "colored", "clap", "lazy_static", "jemallocator", "fork", "broker"]
@@ -104,6 +106,14 @@ required-features = ["ipc"]
 name = "client_sender"
 required-features = ["ipc"]
 
+[[example]]
+name = "server_cursor"
+required-features = ["broker", "ipc", "rpc", "cursors", "sqlx", "futures"]
+
+[[example]]
+name = "client_cursor"
+required-features = ["ipc", "rpc", "cursors"]
+
 [profile.dev]
 overflow-checks = false
 
@@ -111,4 +121,3 @@ overflow-checks = false
 strip = true
 lto = true
 codegen-units = 1
-

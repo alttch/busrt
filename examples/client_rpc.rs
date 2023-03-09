@@ -1,8 +1,8 @@
+// Demo of client RPC with no handler, which just calls methods
+//
+// use client_rpc_handler example to test client/server
 use busrt::ipc::{Client, Config};
 use busrt::rpc::{Rpc, RpcClient};
-/// Demo of client RPC with no handler, which just calls methods
-///
-/// use client_rpc_handler example to test client/server
 use busrt::{empty_payload, QoS};
 use serde::Deserialize;
 use std::collections::BTreeMap;

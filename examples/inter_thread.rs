@@ -1,4 +1,4 @@
-/// Demo of inter-thread communication (with no RPC layer) with a UNIX socket for external clients
+// Demo of inter-thread communication (with no RPC layer) with a UNIX socket for external clients
 use busrt::broker::{Broker, ServerConfig};
 use busrt::client::AsyncClient;
 use busrt::QoS;
