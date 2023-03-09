@@ -21,6 +21,7 @@ pub const RPC_REQUEST: u8 = 0x01;
 pub const RPC_REPLY: u8 = 0x11;
 pub const RPC_ERROR: u8 = 0x12;
 
+pub const RPC_ERROR_CODE_NOT_FOUND: i16 = -32001;
 pub const RPC_ERROR_CODE_PARSE: i16 = -32700;
 pub const RPC_ERROR_CODE_INVALID_REQUEST: i16 = -32600;
 pub const RPC_ERROR_CODE_METHOD_NOT_FOUND: i16 = -32601;
@@ -650,6 +651,13 @@ impl RpcError {
     pub fn method(err: Option<Vec<u8>>) -> Self {
         Self {
             code: RPC_ERROR_CODE_METHOD_NOT_FOUND,
+            data: err,
+        }
+    }
+    #[inline]
+    pub fn not_found(err: Option<Vec<u8>>) -> Self {
+        Self {
+            code: RPC_ERROR_CODE_NOT_FOUND,
             data: err,
         }
     }
