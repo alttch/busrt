@@ -119,7 +119,7 @@ async fn terminate(allow_log: bool) {
         if allow_log {
             trace!("removing pid file {}", f);
         }
-        let _r = std::fs::remove_file(&f);
+        let _r = std::fs::remove_file(f);
     }
     for f in SOCK_FILES.lock().await.iter() {
         if allow_log {

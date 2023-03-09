@@ -1333,9 +1333,7 @@ impl Broker {
     ) -> Result<(), Error> {
         let cmd = line.trim();
         let mut c = rpc_c.lock().await;
-        let rpc = if let Some(rpc) = c.as_mut() {
-            rpc
-        } else {
+        let Some(rpc) = c.as_mut() else {
             return Err(Error::not_supported(BROKER_RPC_NOT_INIT_ERR));
         };
         // topic
