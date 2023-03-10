@@ -12,9 +12,12 @@ build:
 	rm -rf dist build busrt_async.egg-info
 	python3 setup.py sdist
 
-pub: d pub-pypi
+pub: d pub-pypi pub-anaconda
 
 pub-pypi: upload-pypi
+
+pub-anaconda:
+	/opt/anaconda3/bin/anaconda upload -u bohemia-automation dist/*.tar.gz
 
 upload-pypi:
 	twine upload dist/*
