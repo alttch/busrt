@@ -983,7 +983,6 @@ impl RpcHandlers for BrokerRpcHandlers {
                 let db = self.db.clients.read().unwrap();
                 let mut clients: Vec<ClientInfo> = db
                     .values()
-                    .into_iter()
                     .filter(|c| c.primary)
                     .map(|v| ClientInfo {
                         name: &v.name,
