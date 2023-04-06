@@ -16,13 +16,13 @@ use uuid::Uuid;
 pub struct Payload {
     u: uuid::Uuid,
     #[serde(skip_serializing_if = "Option::is_none")]
-    c: Option<usize>,
+    n: Option<usize>,
 }
 
 impl From<Uuid> for Payload {
     #[inline]
     fn from(u: Uuid) -> Self {
-        Self { u, c: None }
+        Self { u, n: None }
     }
 }
 
@@ -32,16 +32,16 @@ impl Payload {
         &self.u
     }
     #[inline]
-    pub fn bulk_count(&self) -> usize {
-        self.c.unwrap_or(1)
+    pub fn bulk_number(&self) -> usize {
+        self.n.unwrap_or(1)
     }
     #[inline]
-    pub fn set_bulk_count(&mut self, c: usize) {
-        self.c = Some(c);
+    pub fn set_bulk_number(&mut self, n: usize) {
+        self.n = Some(n);
     }
     #[inline]
-    pub fn clear_bulk_count(&mut self) {
-        self.c = None;
+    pub fn clear_bulk_number(&mut self) {
+        self.n = None;
     }
 }
 
