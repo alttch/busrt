@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?
             .payload(),
     )?;
-    cursor.set_bulk_count(bulk_size);
+    cursor.set_bulk_number(bulk_size);
     let packed_cursor = rmp_serde::to_vec_named(&cursor)?;
     let b_cursor = busrt::borrow::Cow::Borrowed(&packed_cursor);
     loop {

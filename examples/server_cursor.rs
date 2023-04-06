@@ -143,7 +143,7 @@ impl RpcHandlers for MyHandlers {
                 // busrt::cursors::Cursor trait, it is possible to have a sigle "next-bulk" method
                 // for all cursor types.
                 let p: cursors::Payload = rmp_serde::from_slice(payload)?;
-                self.cursors.next_bulk(p.uuid(), p.bulk_count()).await
+                self.cursors.next_bulk(p.uuid(), p.bulk_number()).await
             }
             _ => Err(RpcError::method(None)),
         }
