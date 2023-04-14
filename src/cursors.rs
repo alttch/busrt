@@ -133,6 +133,7 @@ impl Meta {
     pub fn mark_finished(&self) {
         self.finished.store(true, atomic::Ordering::SeqCst);
     }
+    #[inline]
     pub fn is_alive(&self) -> bool {
         !self.is_finished() && !self.is_expired()
     }
