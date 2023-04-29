@@ -163,10 +163,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool = PgPoolOptions::new().connect_with(opts).await?;
     let handlers = MyHandlers {
         pool,
-        cursors: <_>::default(),
+        cursors: cursors::Map::new(Duration::from_secs(30)),
     };
-    // spawn a cleaner worker which automatically drops finished and expired cursors
-    handlers.cursors.spawn_cleaner(Duration::from_secs(1));
     let _rpc = RpcClient::new(client, handlers);
     loop {
         sleep(Duration::from_secs(1)).await;

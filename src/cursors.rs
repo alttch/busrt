@@ -46,28 +46,40 @@ impl Payload {
 }
 
 /// A helper map to handle multiple cursors
-#[derive(Default)]
-pub struct Map(pub Arc<RwLock<BTreeMap<uuid::Uuid, Box<dyn Cursor + Send + Sync>>>>);
+pub struct Map {
+    data: Arc<RwLock<BTreeMap<uuid::Uuid, Box<dyn Cursor + Send + Sync>>>>,
+    cleaner: Option<JoinHandle<()>>,
+}
 
 impl Map {
+    /// creates cursor map object, cleaner task is automatically spawned
+    pub fn new(cleaner_interval: Duration) -> Self {
+        let mut map = Self {
+            data: <_>::default(),
+            cleaner: <_>::default(),
+        };
+        let cleaner = map.spawn_cleaner(cleaner_interval);
+        map.cleaner.replace(cleaner);
+        map
+    }
     /// Add a new cursor to the map and return its UUID
     pub async fn add<C>(&self, c: C) -> Uuid
     where
         C: Cursor + Send + Sync + 'static,
     {
         let u = Uuid::new_v4();
-        self.0.write().await.insert(u, Box::new(c));
+        self.data.write().await.insert(u, Box::new(c));
         u
     }
     /// Remove a cursor from the map
     ///
     /// (usually should not be called, unless there is no cleaner worker spawned)
     pub async fn remove<C>(&self, u: &Uuid) {
-        self.0.write().await.remove(u);
+        self.data.write().await.remove(u);
     }
     /// Call "next" method of the cursor, specified by UUID
     pub async fn next(&self, cursor_id: &Uuid) -> Result<Option<Vec<u8>>, RpcError> {
-        if let Some(cursor) = self.0.read().await.get(cursor_id) {
+        if let Some(cursor) = self.data.read().await.get(cursor_id) {
             Ok(cursor.next().await?)
         } else {
             Err(RpcError::not_found(None))
@@ -79,16 +91,14 @@ impl Map {
         cursor_id: &Uuid,
         count: usize,
     ) -> Result<Option<Vec<u8>>, RpcError> {
-        if let Some(cursor) = self.0.read().await.get(cursor_id) {
+        if let Some(cursor) = self.data.read().await.get(cursor_id) {
             Ok(Some(cursor.next_bulk(count).await?))
         } else {
             Err(RpcError::not_found(None))
         }
     }
-    /// Spawns a background cleaner worker which automatically removes finished and expired cursors
-    /// from the map
-    pub fn spawn_cleaner(&self, interval: Duration) -> JoinHandle<()> {
-        let cursors = self.0.clone();
+    fn spawn_cleaner(&self, interval: Duration) -> JoinHandle<()> {
+        let cursors = self.data.clone();
         let mut int = tokio::time::interval(interval);
         tokio::spawn(async move {
             loop {
@@ -96,6 +106,14 @@ impl Map {
                 cursors.write().await.retain(|_, v| v.meta().is_alive());
             }
         })
+    }
+}
+
+impl Drop for Map {
+    fn drop(&mut self) {
+        if let Some(cleaner) = self.cleaner.take() {
+            cleaner.abort();
+        }
     }
 }
 
