@@ -39,8 +39,6 @@ use tokio::time;
 
 #[cfg(feature = "rpc")]
 use crate::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
-#[cfg(feature = "rpc")]
-use serde_value::Value;
 
 pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 
@@ -952,59 +950,81 @@ impl RpcHandlers for BrokerRpcHandlers {
             return Ok(Some(event.payload().to_vec()));
         }
         let payload = event.payload();
-        let params: HashMap<String, Value> = if payload.is_empty() {
-            HashMap::new()
-        } else {
-            rmp_serde::from_slice(event.payload())?
-        };
         match event.parse_method()? {
             "test" => {
-                if !params.is_empty() {
+                if !payload.is_empty() {
                     return Err(RpcError::params(None));
                 }
                 Ok(Some(RPC_OK.to_vec()))
             }
             "info" => {
-                if !params.is_empty() {
+                if !payload.is_empty() {
                     return Err(RpcError::params(None));
                 }
                 Ok(Some(rmp_serde::to_vec_named(&Broker::info())?))
             }
             "stats" => {
-                if !params.is_empty() {
+                if !payload.is_empty() {
                     return Err(RpcError::params(None));
                 }
                 Ok(Some(rmp_serde::to_vec_named(&self.db.stats())?))
             }
-            "client.list" => {
-                if !params.is_empty() {
-                    return Err(RpcError::params(None));
-                }
-                let db = self.db.clients.read().unwrap();
-                let mut clients: Vec<ClientInfo> = db
-                    .values()
-                    .filter(|c| c.primary)
-                    .map(|v| ClientInfo {
-                        name: &v.name,
-                        kind: v.kind.as_str(),
-                        source: v.source.as_deref(),
-                        port: v.port.as_deref(),
-                        r_frames: v.r_frames.load(atomic::Ordering::SeqCst),
-                        r_bytes: v.r_bytes.load(atomic::Ordering::SeqCst),
-                        w_frames: v.w_frames.load(atomic::Ordering::SeqCst),
-                        w_bytes: v.w_bytes.load(atomic::Ordering::SeqCst),
-                        queue: v.tx.len(),
-                        instances: v.secondaries.lock().len() + 1,
-                    })
-                    .collect();
-                clients.sort();
-                Ok(Some(rmp_serde::to_vec_named(&ClientList { clients })?))
-            }
+            "client.list" => self.client_list(payload),
             _ => Err(RpcError::method(None)),
         }
     }
     async fn handle_notification(&self, _event: RpcEvent) {}
     async fn handle_frame(&self, _frame: Frame) {}
+}
+
+#[cfg(feature = "rpc")]
+impl BrokerRpcHandlers {
+    fn client_list(&self, payload: &[u8]) -> RpcResult {
+        #[derive(Deserialize)]
+        struct Params {
+            filter: Option<String>,
+        }
+        let params: Option<Params> = if payload.is_empty() {
+            None
+        } else {
+            Some(rmp_serde::from_slice(payload)?)
+        };
+        let re: Option<regex::Regex> = if let Some(p) = params {
+            if let Some(filter) = p.filter {
+                Some(regex::Regex::new(&filter)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let db = self.db.clients.read().unwrap();
+        let mut clients: Vec<ClientInfo> = db
+            .values()
+            .filter(|c| {
+                c.primary
+                    && if let Some(ref r) = re {
+                        r.is_match(&c.name)
+                    } else {
+                        true
+                    }
+            })
+            .map(|v| ClientInfo {
+                name: &v.name,
+                kind: v.kind.as_str(),
+                source: v.source.as_deref(),
+                port: v.port.as_deref(),
+                r_frames: v.r_frames.load(atomic::Ordering::SeqCst),
+                r_bytes: v.r_bytes.load(atomic::Ordering::SeqCst),
+                w_frames: v.w_frames.load(atomic::Ordering::SeqCst),
+                w_bytes: v.w_bytes.load(atomic::Ordering::SeqCst),
+                queue: v.tx.len(),
+                instances: v.secondaries.lock().len() + 1,
+            })
+            .collect();
+        clients.sort();
+        Ok(Some(rmp_serde::to_vec_named(&ClientList { clients })?))
+    }
 }
 
 #[cfg(not(target_os = "windows"))]
