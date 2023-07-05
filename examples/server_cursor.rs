@@ -8,7 +8,7 @@
 // name varchar). The access credentials are tests/xxx
 use busrt::broker::{Broker, ServerConfig};
 use busrt::rpc::{RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
-use busrt::{async_trait, cursors, Frame};
+use busrt::{async_trait, cursors};
 use futures::{Stream, TryStreamExt};
 use serde::Serialize;
 use sqlx::{
@@ -148,8 +148,6 @@ impl RpcHandlers for MyHandlers {
             _ => Err(RpcError::method(None)),
         }
     }
-    async fn handle_notification(&self, _event: RpcEvent) {}
-    async fn handle_frame(&self, _frame: Frame) {}
 }
 
 #[tokio::main]

@@ -252,9 +252,14 @@ impl TryFrom<Frame> for RpcEvent {
 #[allow(clippy::module_name_repetitions)]
 #[async_trait]
 pub trait RpcHandlers {
-    async fn handle_call(&self, event: RpcEvent) -> RpcResult;
-    async fn handle_notification(&self, event: RpcEvent);
-    async fn handle_frame(&self, frame: Frame);
+    #[allow(unused_variables)]
+    async fn handle_call(&self, event: RpcEvent) -> RpcResult {
+        Err(RpcError::method(None))
+    }
+    #[allow(unused_variables)]
+    async fn handle_notification(&self, event: RpcEvent) {}
+    #[allow(unused_variables)]
+    async fn handle_frame(&self, frame: Frame) {}
 }
 
 pub struct DummyHandlers {}
@@ -267,8 +272,6 @@ impl RpcHandlers for DummyHandlers {
             Some("RPC handler is not implemented".as_bytes().to_vec()),
         ))
     }
-    async fn handle_notification(&self, _event: RpcEvent) {}
-    async fn handle_frame(&self, _frame: Frame) {}
 }
 
 type CallMap = Arc<parking_lot::Mutex<BTreeMap<u32, oneshot::Sender<RpcEvent>>>>;
