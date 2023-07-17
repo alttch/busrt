@@ -53,7 +53,7 @@ class Client:
         self.timeout = 1
 
     async def connect(self):
-        with await self.mgmt_lock:
+        async with self.mgmt_lock:
             if self.path.endswith('.sock') or self.path.endswith(
                     '.socket') or self.path.endswith(
                         '.ipc') or self.path.startswith('/'):
@@ -88,7 +88,7 @@ class Client:
             self.reader_fut = asyncio.ensure_future(self._t_reader(reader))
 
     async def handle_daemon_exception(self, e):
-        with await self.mgmt_lock:
+        async with self.mgmt_lock:
             if self.connected:
                 await self._disconnect()
                 import traceback
@@ -98,7 +98,7 @@ class Client:
         try:
             while True:
                 await asyncio.sleep(self.ping_interval)
-                with await self.socket_lock:
+                async with self.socket_lock:
                     self.writer.write(PING_FRAME)
                     await asyncio.wait_for(self.writer.drain(),
                                            timeout=self.timeout)
@@ -169,7 +169,7 @@ class Client:
         return data
 
     async def disconnect(self):
-        with await self.mgmt_lock:
+        async with self.mgmt_lock:
             await self._disconnect()
 
     async def _disconnect(self):
@@ -182,7 +182,7 @@ class Client:
 
     async def send(self, target=None, frame=None):
         try:
-            with await self.socket_lock:
+            async with self.socket_lock:
                 self.frame_id += 1
                 if self.frame_id > 0xffff_ffff:
                     self.frame_id = 1
