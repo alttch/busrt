@@ -75,7 +75,7 @@ class Rpc:
         return self.client.send(target, request)
 
     async def call(self, target, request):
-        with await self.call_lock:
+        async with self.call_lock:
             call_id = self.call_id + 1
             if call_id == 0xffff_ffff:
                 self.call_id = 0
