@@ -412,7 +412,7 @@ where
     R: AsyncReadExt + Unpin,
 {
     loop {
-        let mut buf = vec![0; 6];
+        let mut buf = [0_u8; 6];
         reader.read_exact(&mut buf).await?;
         let frame_type: FrameKind = buf[0].try_into()?;
         let realtime = buf[5] != 0;
@@ -473,7 +473,7 @@ where
     if name.len() > u16::MAX as usize {
         return Err(Error::data("name too long"));
     }
-    let mut buf = vec![0; 3];
+    let mut buf = [0_u8; 3];
     reader.read_exact(&mut buf).await?;
     if buf[0] != GREETINGS[0] {
         return Err(Error::not_supported("Invalid greetings"));
@@ -482,7 +482,7 @@ where
         return Err(Error::not_supported("Unsupported protocol version"));
     }
     writer.write_all(&buf).await?;
-    let mut buf = vec![0; 1];
+    let mut buf = [0_u8; 1];
     reader.read_exact(&mut buf).await?;
     if buf[0] != RESPONSE_OK {
         return Err(Error::new(
@@ -494,7 +494,7 @@ where
     #[allow(clippy::cast_possible_truncation)]
     writer.write_all(&(name.len() as u16).to_le_bytes()).await?;
     writer.write_all(&n).await?;
-    let mut buf = vec![0; 1];
+    let mut buf = [0_u8; 1];
     reader.read_exact(&mut buf).await?;
     if buf[0] != RESPONSE_OK {
         return Err(Error::new(
