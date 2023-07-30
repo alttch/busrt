@@ -137,7 +137,7 @@ async fn terminate(allow_log: bool) {
             error!("{}", e);
         }
     }
-    SERVER_ACTIVE.store(false, atomic::Ordering::SeqCst);
+    SERVER_ACTIVE.store(false, atomic::Ordering::Relaxed);
     #[cfg(feature = "rpc")]
     sleep(Duration::from_secs(1)).await;
 }
@@ -270,7 +270,7 @@ fn main() {
         info!("BUS/RT broker started");
         let sleep_step = Duration::from_millis(100);
         loop {
-            if !SERVER_ACTIVE.load(atomic::Ordering::SeqCst) {
+            if !SERVER_ACTIVE.load(atomic::Ordering::Relaxed) {
                 break;
             }
             sleep(sleep_step).await;
