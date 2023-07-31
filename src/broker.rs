@@ -102,17 +102,17 @@ macro_rules! safe_send_frame {
 macro_rules! send {
     ($db:expr, $client:expr, $target:expr, $header: expr,
      $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr, $timeout: expr) => {{
-        $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
-        $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-        $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
-        $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+        $client.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+        $client.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
+        $db.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+        $db.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
         trace!("bus/rt message from {} to {}", $client, $target);
         let client = {
             $db.clients.read().unwrap().get($target).map(|c| {
-                c.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
-                c.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-                $db.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
-                $db.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+                c.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                c.w_bytes.fetch_add($len, atomic::Ordering::Relaxed);
+                $db.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                $db.w_bytes.fetch_add($len, atomic::Ordering::Relaxed);
                 c.clone()
             })
         };
@@ -136,10 +136,10 @@ macro_rules! send {
 macro_rules! send_broadcast {
     ($db:expr, $client:expr, $target:expr, $header: expr,
      $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr, $timeout: expr) => {{
-        $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
-        $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-        $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
-        $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+        $client.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+        $client.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
+        $db.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+        $db.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
         trace!("bus/rt broadcast message from {} to {}", $client, $target);
         #[allow(clippy::mutable_key_type)]
         let subs = { $db.broadcasts.read().unwrap().get_clients_by_mask($target) };
@@ -154,12 +154,12 @@ macro_rules! send_broadcast {
                 realtime: $realtime,
             });
             $db.w_frames
-                .fetch_add(subs.len() as u64, atomic::Ordering::SeqCst);
+                .fetch_add(subs.len() as u64, atomic::Ordering::Relaxed);
             $db.w_bytes
-                .fetch_add($len * subs.len() as u64, atomic::Ordering::SeqCst);
+                .fetch_add($len * subs.len() as u64, atomic::Ordering::Relaxed);
             for sub in subs {
-                sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
-                sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+                sub.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                sub.w_bytes.fetch_add($len, atomic::Ordering::Relaxed);
                 let _r = safe_send_frame!($db, sub, frame.clone(), $timeout);
             }
         }
@@ -169,10 +169,10 @@ macro_rules! send_broadcast {
 macro_rules! publish {
     ($db:expr, $client:expr, $topic:expr, $header: expr,
      $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr, $timeout: expr) => {{
-        $client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
-        $client.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
-        $db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
-        $db.r_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+        $client.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+        $client.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
+        $db.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+        $db.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
         trace!("bus/rt topic publish from {} to {}", $client, $topic);
         #[allow(clippy::mutable_key_type)]
         let subs = { $db.subscriptions.read().unwrap().get_subscribers($topic) };
@@ -187,12 +187,12 @@ macro_rules! publish {
                 realtime: $realtime,
             });
             $db.w_frames
-                .fetch_add(subs.len() as u64, atomic::Ordering::SeqCst);
+                .fetch_add(subs.len() as u64, atomic::Ordering::Relaxed);
             $db.w_bytes
-                .fetch_add($len * subs.len() as u64, atomic::Ordering::SeqCst);
+                .fetch_add($len * subs.len() as u64, atomic::Ordering::Relaxed);
             for sub in subs {
-                sub.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
-                sub.w_bytes.fetch_add($len, atomic::Ordering::SeqCst);
+                sub.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                sub.w_bytes.fetch_add($len, atomic::Ordering::Relaxed);
                 let _r = safe_send_frame!($db, sub, frame.clone(), $timeout);
             }
         }
@@ -587,10 +587,10 @@ impl BrokerDb {
     fn stats(&self) -> BrokerStats {
         BrokerStats {
             uptime: self.startup_time.elapsed().as_secs(),
-            r_frames: self.r_frames.load(atomic::Ordering::SeqCst),
-            r_bytes: self.r_bytes.load(atomic::Ordering::SeqCst),
-            w_frames: self.w_frames.load(atomic::Ordering::SeqCst),
-            w_bytes: self.w_bytes.load(atomic::Ordering::SeqCst),
+            r_frames: self.r_frames.load(atomic::Ordering::Relaxed),
+            r_bytes: self.r_bytes.load(atomic::Ordering::Relaxed),
+            w_frames: self.w_frames.load(atomic::Ordering::Relaxed),
+            w_bytes: self.w_bytes.load(atomic::Ordering::Relaxed),
         }
     }
     #[cfg(feature = "rpc")]
@@ -668,7 +668,7 @@ impl BrokerDb {
                 sdb.register_client(&client);
                 sdb.subscribe(BROKER_WARN_TOPIC, &client);
             }
-            client.registered.store(true, atomic::Ordering::SeqCst);
+            client.registered.store(true, atomic::Ordering::Relaxed);
             x.insert(client);
         } else {
             return Err(Error::busy(format!(
@@ -694,7 +694,7 @@ impl BrokerDb {
     #[inline]
     async fn unregister_client(&self, client: &Arc<BusRtClient>) {
         #[cfg(feature = "rpc")]
-        let was_registered = client.registered.load(atomic::Ordering::SeqCst);
+        let was_registered = client.registered.load(atomic::Ordering::Relaxed);
         self.drop_client(client);
         #[cfg(feature = "rpc")]
         if client.primary && was_registered {
@@ -704,8 +704,8 @@ impl BrokerDb {
         }
     }
     fn drop_client(&self, client: &Arc<BusRtClient>) {
-        if client.registered.load(atomic::Ordering::SeqCst) {
-            client.registered.store(false, atomic::Ordering::SeqCst);
+        if client.registered.load(atomic::Ordering::Relaxed) {
+            client.registered.store(false, atomic::Ordering::Relaxed);
             self.subscriptions
                 .write()
                 .unwrap()
@@ -1014,10 +1014,10 @@ impl BrokerRpcHandlers {
                 kind: v.kind.as_str(),
                 source: v.source.as_deref(),
                 port: v.port.as_deref(),
-                r_frames: v.r_frames.load(atomic::Ordering::SeqCst),
-                r_bytes: v.r_bytes.load(atomic::Ordering::SeqCst),
-                w_frames: v.w_frames.load(atomic::Ordering::SeqCst),
-                w_bytes: v.w_bytes.load(atomic::Ordering::SeqCst),
+                r_frames: v.r_frames.load(atomic::Ordering::Relaxed),
+                r_bytes: v.r_bytes.load(atomic::Ordering::Relaxed),
+                w_frames: v.w_frames.load(atomic::Ordering::Relaxed),
+                w_bytes: v.w_bytes.load(atomic::Ordering::Relaxed),
                 queue: v.tx.len(),
                 instances: v.secondaries.lock().len() + 1,
             })
@@ -1244,7 +1244,7 @@ impl Broker {
         if client.client.primary {
             let secondary_id = client
                 .secondary_counter
-                .fetch_add(1, atomic::Ordering::SeqCst);
+                .fetch_add(1, atomic::Ordering::Relaxed);
             let secondary_name = format!("{}{}{}", client.client.name, SECONDARY_SEP, secondary_id);
             self.register_client(&secondary_name).await
         } else {
@@ -1585,13 +1585,13 @@ impl Broker {
                     buf.push(OP_ACK);
                     buf.extend_from_slice(op_id);
                     buf.push($code);
-                    client.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    client.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
                     client
                         .w_bytes
-                        .fetch_add(buf.len() as u64, atomic::Ordering::SeqCst);
-                    db.w_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                        .fetch_add(buf.len() as u64, atomic::Ordering::Relaxed);
+                    db.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
                     db.w_bytes
-                        .fetch_add(buf.len() as u64, atomic::Ordering::SeqCst);
+                        .fetch_add(buf.len() as u64, atomic::Ordering::Relaxed);
                     client
                         .tx
                         .send(Arc::new(FrameData {
@@ -1608,13 +1608,13 @@ impl Broker {
             }
             match op {
                 FrameOp::SubscribeTopic => {
-                    client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    client.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
                     client
                         .r_bytes
-                        .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
-                    db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                        .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
+                    db.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
                     db.r_bytes
-                        .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
+                        .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
                     let sp = buf.split(|c| *c == 0);
                     let mut topics = Vec::new();
                     for t in sp {
@@ -1645,13 +1645,13 @@ impl Broker {
                     }
                 }
                 FrameOp::UnsubscribeTopic => {
-                    client.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                    client.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
                     client
                         .r_bytes
-                        .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
-                    db.r_frames.fetch_add(1, atomic::Ordering::SeqCst);
+                        .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
+                    db.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
                     db.r_bytes
-                        .fetch_add(u64::from(len), atomic::Ordering::SeqCst);
+                        .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
                     let sp = buf.split(|c| *c == 0);
                     {
                         let mut sdb = db.subscriptions.write().unwrap();

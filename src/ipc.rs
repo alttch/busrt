@@ -120,7 +120,7 @@ macro_rules! send_data_or_mark_disconnected {
             Ok(result) => {
                 if let Err(e) = result {
                     $self.reader_fut.abort();
-                    $self.connected.store(false, atomic::Ordering::SeqCst);
+                    $self.connected.store(false, atomic::Ordering::Relaxed);
                     return Err(e.into());
                 }
             }
@@ -192,7 +192,7 @@ macro_rules! connect_broker {
             if let Err(e) = handle_read($reader, tx, timeout, reader_responses).await {
                 error!("busrt client reader error: {}", e);
             }
-            rconn.store(false, atomic::Ordering::SeqCst);
+            rconn.store(false, atomic::Ordering::Relaxed);
         });
         (reader_fut, rx)
     }};
@@ -281,7 +281,7 @@ impl Client {
         } else {
             let secondary_id = self
                 .secondary_counter
-                .fetch_add(1, atomic::Ordering::SeqCst);
+                .fetch_add(1, atomic::Ordering::Relaxed);
             let secondary_name = format!("{}{}{}", self.name, SECONDARY_SEP, secondary_id);
             let mut config = self.config.clone();
             config.name = secondary_name;
@@ -384,7 +384,7 @@ impl AsyncClient for Client {
     }
     #[inline]
     fn is_connected(&self) -> bool {
-        self.connected.load(atomic::Ordering::SeqCst)
+        self.connected.load(atomic::Ordering::Relaxed)
     }
     #[inline]
     fn get_timeout(&self) -> Option<Duration> {
@@ -412,7 +412,7 @@ where
     R: AsyncReadExt + Unpin,
 {
     loop {
-        let mut buf = vec![0; 6];
+        let mut buf = [0_u8; 6];
         reader.read_exact(&mut buf).await?;
         let frame_type: FrameKind = buf[0].try_into()?;
         let realtime = buf[5] != 0;
@@ -473,7 +473,7 @@ where
     if name.len() > u16::MAX as usize {
         return Err(Error::data("name too long"));
     }
-    let mut buf = vec![0; 3];
+    let mut buf = [0_u8; 3];
     reader.read_exact(&mut buf).await?;
     if buf[0] != GREETINGS[0] {
         return Err(Error::not_supported("Invalid greetings"));
@@ -482,7 +482,7 @@ where
         return Err(Error::not_supported("Unsupported protocol version"));
     }
     writer.write_all(&buf).await?;
-    let mut buf = vec![0; 1];
+    let mut buf = [0_u8; 1];
     reader.read_exact(&mut buf).await?;
     if buf[0] != RESPONSE_OK {
         return Err(Error::new(
@@ -494,7 +494,7 @@ where
     #[allow(clippy::cast_possible_truncation)]
     writer.write_all(&(name.len() as u16).to_le_bytes()).await?;
     writer.write_all(&n).await?;
-    let mut buf = vec![0; 1];
+    let mut buf = [0_u8; 1];
     reader.read_exact(&mut buf).await?;
     if buf[0] != RESPONSE_OK {
         return Err(Error::new(

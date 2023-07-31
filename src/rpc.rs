@@ -607,7 +607,7 @@ impl Rpc for RpcClient {
     fn is_connected(&self) -> bool {
         self.connected
             .as_ref()
-            .map_or(true, |b| b.load(atomic::Ordering::SeqCst))
+            .map_or(true, |b| b.load(atomic::Ordering::Relaxed))
     }
 }
 

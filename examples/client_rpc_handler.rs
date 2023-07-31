@@ -88,9 +88,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Waiting for frames to {}", name);
     while rpc.is_connected() {
         sleep(Duration::from_secs(1)).await;
-        // if the broker is unavailable, ping sets the client and RPC to disconnected state
-        // after, the program can try reconnecting or quit
-        let _r = rpc.client().lock().await.ping().await;
     }
     Ok(())
 }
