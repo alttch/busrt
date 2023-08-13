@@ -341,6 +341,7 @@ async fn processor<C, H>(
                             handlers.handle_notification(event).await;
                         } else {
                             let h = handlers.clone();
+                            // TODO move to task pool
                             tokio::spawn(async move {
                                 h.handle_notification(event).await;
                             });
@@ -360,6 +361,7 @@ async fn processor<C, H>(
                             None
                         };
                         let h = handlers.clone();
+                        // TODO move to task pool
                         tokio::spawn(async move {
                             let qos = if event.frame().is_realtime() {
                                 QoS::RealtimeProcessed
@@ -430,6 +432,7 @@ async fn processor<C, H>(
             handlers.handle_frame(frame).await;
         } else {
             let h = handlers.clone();
+            // TODO move to task pool
             tokio::spawn(async move {
                 h.handle_frame(frame).await;
             });
