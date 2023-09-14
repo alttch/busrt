@@ -717,7 +717,7 @@ impl BrokerDb {
             self.clients.write().unwrap().remove(&client.name);
             if client.primary {
                 let mut secondaries = client.secondaries.lock();
-                for secondary in secondaries.iter() {
+                for secondary in &*secondaries {
                     let sec = self.clients.read().unwrap().get(secondary).cloned();
                     if let Some(sec) = sec {
                         if sec.kind != BusRtClientKind::Internal {
