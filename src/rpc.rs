@@ -2,7 +2,8 @@ use crate::borrow::Cow;
 use crate::client::AsyncClient;
 use crate::EventChannel;
 use crate::{Error, Frame, FrameKind, OpConfirm, QoS};
-
+use async_trait::async_trait;
+use log::{error, trace, warn};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::atomic;
@@ -11,10 +12,7 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-
-use log::{error, trace, warn};
-
-use async_trait::async_trait;
+use tokio_task_pool::{Pool, Task};
 
 pub const RPC_NOTIFICATION: u8 = 0x00;
 pub const RPC_REQUEST: u8 = 0x01;
@@ -43,6 +41,7 @@ pub const RPC_ERROR_CODE_INTERNAL: i16 = -32603;
 pub struct Options {
     blocking_notifications: bool,
     blocking_frames: bool,
+    task_pool: Option<Arc<Pool>>,
 }
 
 impl Options {
@@ -58,6 +57,12 @@ impl Options {
     #[inline]
     pub fn blocking_frames(mut self) -> Self {
         self.blocking_frames = true;
+        self
+    }
+    #[inline]
+    /// See <https://crates.io/crates/tokio-task-pool>
+    pub fn with_task_pool(mut self, pool: Pool) -> Self {
+        self.task_pool = Some(Arc::new(pool));
         self
     }
 }
@@ -331,6 +336,18 @@ async fn processor<C, H>(
     C: AsyncClient + 'static,
     H: RpcHandlers + Send + Sync + 'static,
 {
+    macro_rules! spawn {
+        ($task_id: expr, $fut: expr) => {
+            if let Some(ref pool) = opts.task_pool {
+                let task = Task::new($fut).with_id($task_id);
+                if let Err(e) = pool.spawn_task(task).await {
+                    error!("Unable to spawn RPC task: {}", e);
+                }
+            } else {
+                tokio::spawn($fut);
+            }
+        };
+    }
     while let Ok(frame) = rx.recv().await {
         if frame.kind() == FrameKind::Message {
             match RpcEvent::try_from(frame) {
@@ -341,8 +358,7 @@ async fn processor<C, H>(
                             handlers.handle_notification(event).await;
                         } else {
                             let h = handlers.clone();
-                            // TODO move to task pool
-                            tokio::spawn(async move {
+                            spawn!("rpc.notification", async move {
                                 h.handle_notification(event).await;
                             });
                         }
@@ -361,8 +377,7 @@ async fn processor<C, H>(
                             None
                         };
                         let h = handlers.clone();
-                        // TODO move to task pool
-                        tokio::spawn(async move {
+                        spawn!("rpc.request", async move {
                             let qos = if event.frame().is_realtime() {
                                 QoS::RealtimeProcessed
                             } else {
@@ -432,8 +447,7 @@ async fn processor<C, H>(
             handlers.handle_frame(frame).await;
         } else {
             let h = handlers.clone();
-            // TODO move to task pool
-            tokio::spawn(async move {
+            spawn!("rpc.frame", async move {
                 h.handle_frame(frame).await;
             });
         }
