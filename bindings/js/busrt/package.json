@@ -1,12 +1,24 @@
 {
   "name": "busrt",
-  "version": "0.1.2",
-  "description": "javascript client for BUS/RT",
+  "version": "0.2.0",
+  "description": "JavaScript/Typescript client for BUS/RT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/alttch/busrt.git"
   },
-  "main": "src/busrt.js",
+  "scripts": {
+    "build": "vite build && tsc src/*.ts --declaration --emitDeclarationOnly --declarationDir dist/"
+  },
+  "main": "dist/busrt.umd.js",
+  "module": "dist/busrt.mjs",
+  "files": ["dist"],
+  "types": "./dist/busrt.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/busrt.mjs",
+      "require": "./dist/busrt.umd.js"
+    }
+  },
   "keywords": [
     "busrt",
     "ipc",
@@ -21,6 +33,10 @@
   "dependencies": {
     "async-mutex": "^0.3.2",
     "promise-socket": "^7.0.0",
-    "sleep-promise": "^9.1.0"
+    "sleep-promise": "^9.1.0",
+    "vite": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.0"
   }
 }

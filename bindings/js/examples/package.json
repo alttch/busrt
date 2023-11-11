@@ -1,0 +1,11 @@
+{
+  "devDependencies": {
+    "@types/node": "^20.9.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "msgpackr": "^1.9.9",
+    "ntqdm": "^1.0.0",
+    "sleep-promise": "^9.1.0"
+  }
+}

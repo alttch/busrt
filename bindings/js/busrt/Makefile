@@ -1,8 +1,10 @@
 all:
-	@echo "Select target"
+	npm run build
 
 bump:
 	npm version --no-git-tag-version patch
 
-pub:
+pub: all upload
+
+upload:
 	npm publish --access public
