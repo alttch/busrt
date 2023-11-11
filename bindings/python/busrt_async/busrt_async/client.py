@@ -127,6 +127,7 @@ class Client:
                         sender = await reader.readuntil(b'\x00')
                         data_len -= len(sender)
                         frame.sender = sender[:-1].decode()
+                        frame.primary_sender = frame.sender.split('%%', 1)[0]
                         if buf[0] == OP_PUBLISH:
                             topic = await reader.readuntil(b'\x00')
                             data_len -= len(topic)

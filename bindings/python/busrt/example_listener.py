@@ -4,7 +4,8 @@ import time
 
 # frame handler
 def on_frame(frame):
-    print('Frame:', hex(frame.type), frame.sender, frame.topic, frame.payload)
+    print('Frame:', hex(frame.type), frame.sender, frame.primary_sender,
+          frame.topic, frame.payload)
 
 
 name = 'test.client.python.sync'

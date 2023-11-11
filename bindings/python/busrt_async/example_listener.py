@@ -4,7 +4,8 @@ import asyncio
 
 # frame handler
 async def on_frame(frame):
-    print('Frame:', hex(frame.type), frame.sender, frame.topic, frame.payload)
+    print('Frame:', hex(frame.type), frame.sender, frame.primary_sender,
+          frame.topic, frame.payload)
 
 
 async def main():

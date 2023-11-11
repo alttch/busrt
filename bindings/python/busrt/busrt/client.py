@@ -142,6 +142,7 @@ class Client:
                                                                maxsplit=1)
                             frame.topic = None
                         frame.sender = sender.decode()
+                        frame.primary_sender = frame.sender.split('%%', 1)[0]
                     except Exception as e:
                         logger.error(f'Invalid frame from the server: {e}')
                         raise
