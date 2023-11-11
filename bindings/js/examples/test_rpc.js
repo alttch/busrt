@@ -38,12 +38,11 @@ const onCall = async (ev) => {
 
 // frame handler (broadcasts and topics)
 const onFrame = async (frame) => {
-  //const payload = frame.getPayload();
-  console.log(frame);
+  const payload = frame.getPayload();
   console.log(
     frame.primary_sender,
     frame.topic,
-    //payload.length > 0 ? msgpack.unpack(payload) : null
+    payload.length > 0 ? msgpack.unpack(payload) : null
   );
 };
 
@@ -58,19 +57,19 @@ const main = async () => {
   rpc.onCall = onCall;
   rpc.onFrame = onFrame;
   await bus.subscribe("test");
-  await bus.publish("test", "hello");
+  await bus.publish("test", msgpack.pack("hello"));
   // send test call
   let payload = { i: "#" };
-  // call rpc test method, no response required
-  //await rpc.call0("target", new RpcRequest("test", msgpack.pack(payload)));
+  // call rpc test method, no payload, no response required
+  await rpc.call0("target", "test");
   // call rpc test method and wait for the response
-  //try {
-    //const request = await rpc.call("eva.core", "test");
-    //const result = await request.waitCompleted();
-    //console.log(msgpack.unpack(result.getPayload()));
-  //} catch (err) {
-    //console.log(err.code, err.message.toString());
-  //}
+  try {
+    const request = await rpc.call("eva.core", "test");
+    const result = await request.waitCompleted();
+    console.log(msgpack.unpack(result.getPayload()));
+  } catch (err) {
+    console.log(err.code, err.message.toString());
+  }
   //return;
   // handle local RPC methods while connected
   while (rpc.isConnected()) {
