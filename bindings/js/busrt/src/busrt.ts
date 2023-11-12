@@ -587,7 +587,7 @@ export class Bus {
       const sock = new net.Socket();
       sock.setNoDelay(true);
       this.socket = new PromiseSocket(sock);
-      this.socket.setTimeout(this.timeout * 1000);
+      //this.socket.setTimeout(this.timeout * 1000);
       await this.socket.connect(path);
       const header = await this.socket.read(3);
       if (header[0] != GREETINGS) {

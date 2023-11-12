@@ -1,6 +1,6 @@
 {
   "name": "busrt",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "JavaScript/Typescript client for BUS/RT",
   "repository": {
     "type": "git",
@@ -11,7 +11,9 @@
   },
   "main": "dist/busrt.umd.js",
   "module": "dist/busrt.mjs",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "types": "./dist/busrt.d.ts",
   "exports": {
     ".": {
