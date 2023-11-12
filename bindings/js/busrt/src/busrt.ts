@@ -321,7 +321,7 @@ export class Rpc {
   /** Method, called on incoming RPC notifications */
   onNotification?: (notification: RpcEvent) => void;
   /** Method, called on incoming RPC calls */
-  onCall?: (call: RpcEvent) => Promise<Buffer>;
+  onCall?: (call: RpcEvent) => Promise<Buffer | null | undefined>;
 
   /**
    * @param {Bus} client - Bus client
