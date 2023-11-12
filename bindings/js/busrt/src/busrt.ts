@@ -51,6 +51,7 @@ enum RpcOp {
   Error = 0x12
 }
 
+/** @ignore */
 interface FrameInterface {
   payload?: Buffer;
   header?: Buffer;
@@ -154,7 +155,7 @@ export class OpResult {
   }
 }
 
-export class RpcCallEvent {
+export class RpcOpResult {
   /** @ignore */
   completed: typeof Mutex;
   /** @ignore */
@@ -186,10 +187,10 @@ export class RpcCallEvent {
   /**
    * Waits until the operation is completed
    *
-   * @returns {Promise<RpcCallEvent>}
+   * @returns {Promise<RpcOpResult>}
    * @throws {BusError}
    */
-  async waitCompleted(): Promise<RpcCallEvent> {
+  async waitCompleted(): Promise<RpcOpResult> {
     const r = await this.completed.acquire();
     r();
     if (this.error) {
@@ -314,7 +315,7 @@ export class Rpc {
   /** @ignore */
   call_lock: typeof Mutex;
   /** @ignore */
-  calls: Map<number, RpcCallEvent>;
+  calls: Map<number, RpcOpResult>;
   /** Method, called on incoming frames */
   onFrame?: (frame: RpcEvent) => void;
   /** Method, called on incoming RPC notifications */
@@ -399,21 +400,21 @@ export class Rpc {
    * @param {Buffer} [payload] - payload
    * @param {QoS} [qos] - QoS
    *
-   * @returns {Promise<RpcCallEvent>}
+   * @returns {Promise<RpcOpResult>}
    */
   async call(
     target: string,
     method: string,
     params?: Buffer,
     qos?: QoS
-  ): Promise<RpcCallEvent> {
+  ): Promise<RpcOpResult> {
     const release = await this.call_lock.acquire();
     const callId = this.callId + 1;
     this.callId = callId == 0xffff_ffff ? 0 : callId;
     release();
-    const callEvent = new RpcCallEvent();
-    await callEvent.lock();
-    this.calls.set(callId, callEvent);
+    const rpcOpResult = new RpcOpResult();
+    await rpcOpResult.lock();
+    this.calls.set(callId, rpcOpResult);
     const callIdBuf = Buffer.alloc(4);
     callIdBuf.writeUInt32LE(callId);
     const request = new RpcRequest(method, params);
@@ -429,16 +430,16 @@ export class Rpc {
       const code = await opc._waitCompletedCode();
       if (code !== undefined && code != RESPONSE_OK) {
         this.calls.delete(callId);
-        callEvent.error = new BusError(-32000 - code);
-        (callEvent as any).release();
+        rpcOpResult.error = new BusError(-32000 - code);
+        (rpcOpResult as any).release();
       }
     } catch (err: any) {
       this.calls.delete(callId);
       const err_code = BusErrorCode.Io;
-      callEvent.error = new BusError(err_code, Buffer.from(err.toString()));
-      (callEvent as any).release();
+      rpcOpResult.error = new BusError(err_code, Buffer.from(err.toString()));
+      (rpcOpResult as any).release();
     }
-    return callEvent;
+    return rpcOpResult;
   }
 
   /** @ignore */
@@ -505,20 +506,20 @@ export class Rpc {
         const callId = (frame.payload as Buffer).readUInt32LE(
           (frame.payloadPos || 0) + 1
         );
-        const callEvent = me.calls.get(callId);
-        if (callEvent) {
+        const rpcOpResult = me.calls.get(callId);
+        if (rpcOpResult) {
           me.calls.delete(callId);
-          callEvent.frame = frame;
+          rpcOpResult.frame = frame;
           if (opCode == RpcOp.Error) {
             const err_code = (frame.payload as Buffer).readInt16LE(
               (frame.payloadPos || 0) + 5
             );
-            callEvent.error = new BusError(
+            rpcOpResult.error = new BusError(
               err_code,
               (frame.payload as Buffer).slice((frame.payloadPos || 0) + 7)
             );
           }
-          (callEvent as any).release();
+          (rpcOpResult as any).release();
         } else {
           console.warn(`orphaned RPC response: ${callId}`);
         }

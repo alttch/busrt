@@ -1,0 +1,8 @@
+{
+    "$schema": "https://typedoc.org/schema.json",
+    "name": "BMAT",
+    "entryPoints": ["./src/*.ts"],
+    "navigationLinks": {
+        "GitHub": "https://github.com/eva-ics/bmat/bindings/js/busrt"
+    }
+}
