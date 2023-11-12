@@ -3,9 +3,9 @@
 const ntqdm = require("ntqdm");
 const sleep = require("sleep-promise");
 
-const { Client, Frame, BusOp, QoS } = require("../busrt/");
+const { Bus, Frame, BusOp, QoS } = require("../busrt/");
 
-const disconnected = async () => {
+const onDisconnect = async () => {
   console.log("BUS/RT disconnected");
 };
 
@@ -22,8 +22,8 @@ function* generator(steps) {
 }
 
 const test = async () => {
-  const bus = new Client("js");
-  bus.onDisconnect = disconnected;
+  const bus = new Bus("js");
+  bus.onDisconnect = onDisconnect;
   bus.onFrame = onFrame;
   //await bus.connect(("localhost", 9924));
   await bus.connect("/tmp/busrt.sock");

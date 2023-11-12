@@ -6,10 +6,9 @@ const { PromiseSocket } = require("promise-socket");
 const GREETINGS = 0xeb;
 const PROTOCOL_VERSION = 1;
 const PING_FRAME = Buffer.from([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const RESPONSE_OK = 1;
 
-export const RESPONSE_OK = 1;
-
-export enum BusOp {
+enum BusOp {
   Nop = 0,
   Publish = 1,
   Subscribe = 2,
@@ -19,6 +18,7 @@ export enum BusOp {
   Ack = 0xfe
 }
 
+/** Bus call QoS */
 export enum QoS {
   No = 0,
   Processed = 1,
@@ -26,66 +26,89 @@ export enum QoS {
   RealtimeProcessed = 3
 }
 
-export enum BusError {
-  ClientNotRegistered = 0x71,
-  Data = 0x72,
-  Io = 0x73,
-  Other = 0x74,
-  NotSupported = 0x75,
-  Busy = 0x76,
-  NotDelivered = 0x77,
-  Timeout = 0x78
+/** Bus call errors (-32000 - code) */
+export enum BusErrorCode {
+  BusNotRegistered = -32113,
+  Data = -32114,
+  Io = -32115,
+  Other = -32116,
+  NotSupported = -32117,
+  Busy = -32118,
+  NotDelivered = -32119,
+  Timeout = -32120,
+  Access = -32121,
+  RpcParse = -32700,
+  RpcInvalidRequest = -32600,
+  RpcMethodNotFound = -32601,
+  RpcInvalidMethodParams = -32602,
+  RpcInternal = -32603
 }
 
-export enum RpcOp {
+enum RpcOp {
   Notification = 0x00,
   Request = 0x01,
   Reply = 0x11,
   Error = 0x12
 }
 
-export enum RpcErrorCode {
-  Parse = -32700,
-  InvalidRequest = -32600,
-  MethodNotFound = -32601,
-  InvalidMethodParams = -32602,
-  Internal = -32603
-}
-
-export interface FrameInterface {
+interface FrameInterface {
   payload?: Buffer;
   header?: Buffer;
-  topic?: Array<string> | string;
+  op_topic?: Array<string> | string;
   qos: QoS;
   busOp: BusOp;
 }
 
+/** Bus frame */
 export class Frame implements FrameInterface {
+  /** @ignore */
   busOp: BusOp;
+  /** @ignore */
   qos: number;
+  /** @ignore */
   payload?: Buffer;
+  /** @ignore */
   header?: Buffer;
+  /** @ignore */
   payloadPos?: number;
-  sender?: string;
+  /** use this field to get the real frame sender */
   primary_sender?: string;
-  topic?: Array<string> | string;
+  /** frame sender with an optional secondary suffix */
+  sender?: string;
+  /** frame topic (in incoming publish events) */
+  topic?: string;
+  /** @ignore */
+  op_topic?: string | Array<string>;
 
+  /** @ignore */
   constructor(op: BusOp, qos: number = QoS.Processed) {
     this.busOp = op === undefined ? BusOp.Message : op;
     this.qos = qos === undefined ? QoS.Processed : qos;
   }
 
-  getPayload(): Buffer | undefined {
-    return this.payload?.slice(this.payloadPos);
+  /**
+   * Gets frame payload
+   *
+   * @returns {Buffer}
+   */
+  getPayload(): Buffer {
+    // payload is always set for incoming frames
+    return (this.payload as Buffer).slice(this.payloadPos);
   }
 }
 
-class ClientFrame {
+/** Bus operation result */
+export class OpResult {
+  /** @ignore */
   qos: QoS;
+  /** @ignore */
   locker: typeof Mutex;
+  /** @ignore */
   result?: number;
+  /** @ignore */
   release?: Promise<typeof Releaser>;
 
+  /** @ignore */
   constructor(qos: QoS = QoS.No) {
     this.qos = qos;
     if ((qos & 0b1) != 0) {
@@ -93,15 +116,22 @@ class ClientFrame {
     }
   }
 
+  /**
+   * Is operation completed
+   *
+   * @returns {boolean}
+   */
   isCompleted(): boolean {
     return (this.qos & 0b1) == 0 ? true : this.result !== undefined;
   }
 
+  /** @ignore */
   async lock(): Promise<void> {
     this.release = await this.locker.acquire();
   }
 
-  async waitCompleted(): Promise<number | undefined> {
+  /** @ignore */
+  async _waitCompletedCode(): Promise<number | undefined> {
     if ((this.qos & 0b1) == 0) {
       return;
     }
@@ -109,26 +139,56 @@ class ClientFrame {
     r();
     return this.result;
   }
+
+  /**
+   * Waits until the operation is completed
+   *
+   * @returns {Promise<void>}
+   * @throws {BusError}
+   */
+  async waitCompleted(): Promise<void> {
+    const code = await this._waitCompletedCode();
+    if (code !== undefined && code !== RESPONSE_OK) {
+      throw new BusError(-32000 - code);
+    }
+  }
 }
 
-class RpcCallEvent {
+export class RpcCallEvent {
+  /** @ignore */
   completed: typeof Mutex;
+  /** @ignore */
   frame?: Frame;
-  error?: RpcError;
+  /** @ignore */
+  error?: BusError;
+  /** @ignore */
   release?: Promise<typeof Releaser>;
 
+  /** @ignore */
   constructor() {
     this.completed = new Mutex();
   }
 
+  /**
+   * Is operation completed
+   *
+   * @returns {boolean}
+   */
   isCompleted(): boolean {
     return this.frame !== undefined || this.error !== undefined;
   }
 
+  /** @ignore */
   async lock(): Promise<void> {
     this.release = await this.completed.acquire();
   }
 
+  /**
+   * Waits until the operation is completed
+   *
+   * @returns {Promise<RpcCallEvent>}
+   * @throws {BusError}
+   */
   async waitCompleted(): Promise<RpcCallEvent> {
     const r = await this.completed.acquire();
     r();
@@ -139,24 +199,47 @@ class RpcCallEvent {
     }
   }
 
-  getPayload() {
-    return this.frame?.payload?.slice((this.frame?.payloadPos || 0) + 5);
+  /**
+   * Gets frame payload
+   *
+   * @returns {Buffer}
+   */
+  getPayload(): Buffer {
+    // payload is always set for incoming frames
+    return ((this.frame as Frame).payload as Buffer).slice(
+      (this.frame?.payloadPos || 0) + 5
+    );
   }
 }
 
-class RpcEvent {
+/**
+ * Incoming RPC-layer events
+ */
+export class RpcEvent {
+  /** @ignore */
   op: RpcOp;
+  /** bus frame */
   frame: Frame;
+  /** @ignore */
   payloadPos: number;
+  /* RPC method (in RPC calls) */
   method?: Buffer;
+  /** @ignore */
   callId?: number;
 
+  /** @ignore */
   constructor(op: RpcOp, frame: Frame, payloadPos: number) {
     this.op = op;
     this.frame = frame;
     this.payloadPos = payloadPos;
   }
-  getPayload() {
+
+  /**
+   * Gets frame payload
+   *
+   * @returns {Buffer}
+   */
+  getPayload(): Buffer | undefined {
     return this.frame?.payload?.slice(
       (this.frame?.payloadPos || 0) + this.payloadPos
     );
@@ -205,30 +288,44 @@ class RpcReply implements FrameInterface {
   }
 }
 
-export class RpcError {
+/** Bus errors */
+export class BusError {
+  /** Error code */
   code: number;
-  message: any;
+  /** Error message */
+  message?: Buffer;
 
-  constructor(code: number, message?: any) {
+  /**
+   * @param {number} code - error code
+   * @param {Buffer} [message] - encoded message payload
+   */
+  constructor(code: number, message?: Buffer) {
     this.code = code;
-    if (message !== undefined) {
-      this.message = message;
-    } else {
-      this.message = Buffer.from(`RPC error code ${code}`);
-    }
+    this.message = message;
   }
 }
 
+/** Bus RPC layer */
 export class Rpc {
-  client: Client;
+  /** attached bus client */
+  client: Bus;
+  /** @ignore */
   callId: number;
+  /** @ignore */
   call_lock: typeof Mutex;
+  /** @ignore */
   calls: Map<number, RpcCallEvent>;
+  /** Method, called on incoming frames */
   onFrame?: (frame: RpcEvent) => void;
+  /** Method, called on incoming RPC notifications */
   onNotification?: (notification: RpcEvent) => void;
+  /** Method, called on incoming RPC calls */
   onCall?: (call: RpcEvent) => Promise<Buffer>;
 
-  constructor(client: Client) {
+  /**
+   * @param {Bus} client - Bus client
+   */
+  constructor(client: Bus) {
     this.client = client;
     this.client.onFrame = (frame: Frame) => {
       this._handleFrame(frame, this);
@@ -237,29 +334,53 @@ export class Rpc {
     this.call_lock = new Mutex();
     this.calls = new Map();
     this.onCall = () => {
-      throw new RpcError(
-        RpcErrorCode.MethodNotFound,
+      throw new BusError(
+        BusErrorCode.RpcMethodNotFound,
         Buffer.from("RPC engine not intialized")
       );
     };
   }
 
+  /**
+   * Is RPC client connected
+   *
+   * @returns {boolean}
+   */
   isConnected(): boolean {
     return this.client.connected;
   }
 
-  notify(target: string, payload?: Buffer, qos?: QoS): Promise<ClientFrame> {
+  /**
+   * Sends RPC notification
+   *
+   * @param {string} target - notification target
+   * @param {Buffer} [payload] - payload
+   * @param {QoS} [qos] - QoS
+   *
+   * @returns {Promise<OpResult>}
+   */
+  notify(target: string, payload?: Buffer, qos?: QoS): Promise<OpResult> {
     const notification = new RpcNotification(payload);
     if (qos !== undefined) notification.qos = qos;
-    return this.client.send(target, notification);
+    return this.client._send(notification, target);
   }
 
+  /**
+   * Performs RPC call with no reply required
+   *
+   * @param {string} target - RPC target
+   * @param {string} method - RPC method on the target
+   * @param {Buffer} [payload] - payload
+   * @param {QoS} [qos] - QoS
+   *
+   * @returns {Promise<OpResult>}
+   */
   call0(
     target: string,
     method: string,
     params?: Buffer,
     qos?: QoS
-  ): Promise<ClientFrame> {
+  ): Promise<OpResult> {
     const request = new RpcRequest(method, params);
     if (qos !== undefined) request.qos = qos;
     request.header = Buffer.concat([
@@ -267,9 +388,19 @@ export class Rpc {
       request.method,
       Buffer.alloc(1)
     ]);
-    return this.client.send(target, request);
+    return this.client._send(request, target);
   }
 
+  /**
+   * Performs RPC call
+   *
+   * @param {string} target - RPC target
+   * @param {string} method - RPC method on the target
+   * @param {Buffer} [payload] - payload
+   * @param {QoS} [qos] - QoS
+   *
+   * @returns {Promise<RpcCallEvent>}
+   */
   async call(
     target: string,
     method: string,
@@ -294,24 +425,24 @@ export class Rpc {
       Buffer.alloc(1)
     ]);
     try {
-      const opc = await this.client.send(target, request);
-      const code = await opc.waitCompleted();
-      if (code != RESPONSE_OK) {
+      const opc = await this.client._send(request, target);
+      const code = await opc._waitCompletedCode();
+      if (code !== undefined && code != RESPONSE_OK) {
         this.calls.delete(callId);
-        const err_code = -32000 - (code || 0);
-        callEvent.error = new RpcError(err_code);
+        callEvent.error = new BusError(-32000 - code);
         (callEvent as any).release();
       }
     } catch (err: any) {
       this.calls.delete(callId);
-      const err_code = -32000 - BusError.Io;
-      callEvent.error = new RpcError(err_code, Buffer.from(err.toString()));
+      const err_code = BusErrorCode.Io;
+      callEvent.error = new BusError(err_code, Buffer.from(err.toString()));
       (callEvent as any).release();
     }
     return callEvent;
   }
 
-  async _handleFrame(frame: Frame, me: Rpc) {
+  /** @ignore */
+  async _handleFrame(frame: Frame, me: Rpc): Promise<void> {
     if (frame.busOp == BusOp.Message) {
       const opCode = (frame.payload as Buffer)[frame.payloadPos || 0];
       if (opCode == RpcOp.Notification) {
@@ -341,6 +472,7 @@ export class Rpc {
           }
         } else {
           const reply = new RpcReply();
+          reply.qos = frame.qos;
           try {
             if (me.onCall) {
               reply.payload = await me.onCall(ev);
@@ -354,7 +486,7 @@ export class Rpc {
             }
           } catch (err: any) {
             const code =
-              err.code === undefined ? RpcErrorCode.Internal : err.code;
+              err.code === undefined ? BusErrorCode.RpcInternal : err.code;
             const codeBuf = Buffer.alloc(2);
             codeBuf.writeInt16LE(code);
             reply.header = Buffer.concat([
@@ -362,12 +494,12 @@ export class Rpc {
               callIdBuf,
               codeBuf
             ]);
-            reply.payload = err.message;
-            if (reply.payload === undefined) {
-              reply.payload = Buffer.from(err.toString());
-            }
+            reply.payload =
+              err.message === undefined ? Buffer.alloc(0) : err.message;
           }
-          await me.client.send(sender || "", reply);
+          if (sender) {
+            await me.client._send(reply, sender);
+          }
         }
       } else if (opCode == RpcOp.Reply || opCode == RpcOp.Error) {
         const callId = (frame.payload as Buffer).readUInt32LE(
@@ -381,7 +513,7 @@ export class Rpc {
             const err_code = (frame.payload as Buffer).readInt16LE(
               (frame.payloadPos || 0) + 5
             );
-            callEvent.error = new RpcError(
+            callEvent.error = new BusError(
               err_code,
               (frame.payload as Buffer).slice((frame.payloadPos || 0) + 7)
             );
@@ -399,25 +531,40 @@ export class Rpc {
   }
 }
 
-export class Client {
+/** BUS/RT client */
+export class Bus {
+  /** assigned name */
   name: string;
+  /** called on incoming frames */
   onFrame?: (frame: Frame) => void;
+  /** called on disconnect */
   onDisconnect?: () => void;
-  ping_interval: number;
+  /** broker ping interval */
+  pingInterval: number;
+  /** @ignore */
   connected: boolean;
+  /** bus timeout */
   timeout: number;
+  /** @ignore */
   mgmt_lock: typeof Mutex;
+  /** @ignore */
   socket_lock: typeof Mutex;
+  /** @ignore */
   frameId: number;
-  frames: Map<number, ClientFrame>;
+  /** @ignore */
+  frames: Map<number, OpResult>;
+  /** @ignore */
   socket: typeof PromiseSocket;
 
+  /**
+   * @param {string} name - client name
+   */
   constructor(name: string) {
     if (name === undefined) {
       throw "name is not defined";
     }
     this.name = name;
-    this.ping_interval = 1;
+    this.pingInterval = 1;
     this.timeout = 5;
     this.connected = false;
     this.mgmt_lock = new Mutex();
@@ -426,6 +573,13 @@ export class Client {
     this.frames = new Map();
   }
 
+  /**
+   * Connects the client
+   *
+   * @param {string} path - UNIX socket or TCP host:port
+   *
+   * @returns {Promise<void>}
+   */
   async connect(path: string): Promise<void> {
     const release = await this.mgmt_lock.acquire();
     try {
@@ -464,7 +618,8 @@ export class Client {
     }
   }
 
-  async _tReader(me: Client): Promise<void> {
+  /** @ignore */
+  async _tReader(me: Bus): Promise<void> {
     try {
       let socket = me.socket;
       while (me.connected) {
@@ -517,7 +672,8 @@ export class Client {
     }
   }
 
-  async _handleDaemonException(me: Client, e: any) {
+  /** @ignore */
+  async _handleDaemonException(me: Bus, e: any): Promise<void> {
     let release = await me.mgmt_lock.acquire();
     let connected = me.connected;
     try {
@@ -533,15 +689,21 @@ export class Client {
     }
   }
 
-  send0(frame: FrameInterface) {
-    return this._send(frame);
-  }
-
-  send(target: string, frame: FrameInterface) {
+  /**
+   * Sends a message to the target
+   *
+   * @param {string} target - bus target
+   * @param {Buffer} [payload] - payload
+   * @param {QoS} [qos] - QoS
+   */
+  send(target: string, payload?: Buffer, qos?: QoS): Promise<OpResult> {
+    const frame = new Frame(BusOp.Message, qos);
+    frame.payload = payload;
     return this._send(frame, target);
   }
 
-  async _send(frame: FrameInterface, target?: string) {
+  /** @ignore */
+  async _send(frame: FrameInterface, target?: string): Promise<OpResult> {
     const release = await this.socket_lock.acquire();
     try {
       this.frameId += 1;
@@ -549,7 +711,7 @@ export class Client {
         this.frameId = 1;
       }
       const frameId = this.frameId;
-      const o = new ClientFrame(frame.qos);
+      const o = new OpResult(frame.qos);
       try {
         if ((frame.qos & 0b1) != 0) {
           await o.lock();
@@ -561,16 +723,16 @@ export class Client {
           frame.busOp == BusOp.Unsubscribe
         ) {
           let payload;
-          if (Array.isArray(frame.topic)) {
+          if (Array.isArray(frame.op_topic)) {
             const p: Array<Buffer> = [];
-            frame.topic.map((v) => {
+            frame.op_topic.map((v) => {
               p.push(Buffer.from(v, "utf8"));
               p.push(Buffer.alloc(1));
             });
             p.pop();
             payload = Buffer.concat(p);
           } else {
-            payload = Buffer.from(frame.topic || "", "utf8");
+            payload = Buffer.from(frame.op_topic || "", "utf8");
           }
           const header = Buffer.alloc(9);
           header.writeUInt32LE(frameId);
@@ -610,7 +772,8 @@ export class Client {
     }
   }
 
-  async _tPing(me: Client) {
+  /** @ignore */
+  async _tPing(me: Bus): Promise<void> {
     const socket = me.socket;
     try {
       while (me.connected) {
@@ -620,14 +783,19 @@ export class Client {
         } finally {
           release();
         }
-        await sleep(me.ping_interval * 1000);
+        await sleep(me.pingInterval * 1000);
       }
     } catch (err) {
       await me._handleDaemonException(me, err);
     }
   }
 
-  async disconnect() {
+  /**
+   * Disconnects the bus client
+   *
+   * @returns {Promise<void>}
+   */
+  async disconnect(): Promise<void> {
     let release = await this.mgmt_lock.acquire();
     let connected = this.connected;
     try {
@@ -640,28 +808,57 @@ export class Client {
     }
   }
 
-  _disconnect(me: Client) {
+  /** @ignore */
+  _disconnect(me: Bus): void {
     me.socket.destroy();
     me.connected = false;
   }
 
-  isConnected() {
+  /**
+   * Is bus client connected
+   *
+   * @returns {boolean}
+   */
+  isConnected(): boolean {
     return this.connected;
   }
 
-  async subscribe(topics: Array<string> | string) {
+  /**
+   * Subscribes client to topic(s)
+   *
+   * @param {string|Array<string>} topics - topics to subscribe
+   *
+   * @returns {Promise<OpResult>}
+   */
+  async subscribe(topics: Array<string> | string): Promise<OpResult> {
     const frame = new Frame(BusOp.Subscribe, QoS.Processed);
-    frame.topic = topics;
+    frame.op_topic = topics;
     return await this._send(frame);
   }
 
-  async unsubscribe(topics: Array<string>) {
+  /**
+   * Unsubscribes client from topic(s)
+   *
+   * @param {string|Array<string>} topics - topics to unsubscribe
+   *
+   * @returns {Promise<OpResult>}
+   */
+  async unsubscribe(topics: Array<string>): Promise<OpResult> {
     const frame = new Frame(BusOp.Unsubscribe, QoS.Processed);
-    frame.topic = topics;
+    frame.op_topic = topics;
     return await this._send(frame);
   }
 
-  async publish(topic: string, payload?: Buffer, qos?: QoS) {
+  /**
+   * Publishes a message to a topic
+   *
+   * @param {string} topic - the target topic
+   * @param {Buffer} [payload] - payload
+   * @param {QoS} [qos] - QoS
+   *
+   * @returns {Promise<OpResult>}
+   */
+  async publish(topic: string, payload?: Buffer, qos?: QoS): Promise<OpResult> {
     const frame = new Frame(BusOp.Publish, qos);
     frame.payload = payload;
     return await this._send(frame, topic);

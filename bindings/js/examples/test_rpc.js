@@ -5,14 +5,14 @@ const msgpack = require("msgpackr");
 const sleep = require("sleep-promise");
 
 const {
-  Client,
+  Bus,
   Rpc,
   Frame,
   BusOp,
   QoS,
   RpcRequest,
-  RpcError,
-  RpcErrorCode
+  BusError,
+  BusErrorCode
 } = require("../busrt/");
 
 // RPC notification handler
@@ -30,9 +30,12 @@ const onCall = async (ev) => {
   if (method == "test") {
     return msgpack.pack({ ok: true });
   } else if (method == "err") {
-    throw new RpcError(-777, "test error");
+    throw new BusError(-777, "test error");
   } else {
-    throw new RpcError(RpcErrorCode.MethodNotFound);
+    throw new BusError(
+      BusErrorCode.RpcMethodNotFound,
+      Buffer.from(`no such method: ${method}`)
+    );
   }
 };
 
@@ -48,15 +51,21 @@ const onFrame = async (frame) => {
 
 const main = async () => {
   // create and connect a new client
-  const bus = new Client("js");
+  const bus = new Bus("js");
   await bus.connect("/opt/eva4/var/bus.ipc");
+  const op = await bus.send("test", msgpack.pack("123"));
+  try {
+    await op.waitCompleted();
+  } catch (err) {
+    console.log(err.code, err.message?.toString());
+  }
   // init RPC layer
   const rpc = new Rpc(bus);
   // init RPC handlers if incoming event handling is required
   rpc.onNotification = onNotification;
   rpc.onCall = onCall;
   rpc.onFrame = onFrame;
-  await bus.subscribe("test");
+  await bus.subscribe("#");
   await bus.publish("test", msgpack.pack("hello"));
   // send test call
   let payload = { i: "#" };
