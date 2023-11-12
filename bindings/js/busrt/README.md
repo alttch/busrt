@@ -108,4 +108,4 @@ main();
 
 ## API reference
 
-<https://pub.bma.ai/dev/docs/bmat/>
+<https://pub.bma.ai/dev/docs/busrt/js/>
