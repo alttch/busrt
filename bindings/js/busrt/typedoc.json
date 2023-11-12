@@ -1,6 +1,6 @@
 {
     "$schema": "https://typedoc.org/schema.json",
-    "name": "BUS/RT JavaScript/TypeScript client",
+    "name": "BUS/RT JS",
     "entryPoints": ["./src/*.ts"],
     "navigationLinks": {
         "GitHub": "https://github.com/alttch/busrt/tree/main/bindings/js/busrt",
