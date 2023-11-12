@@ -26,13 +26,16 @@ const main = async () => {
   console.log(bus.isConnected());
 
   // subscribe to topics
-  await bus.subscribe(["some/topic1", "topic2"]).waitCompleted(); // single topic str or list
+  const req1 = await bus.subscribe(["some/topic1", "topic2"]);
+  await req1.waitCompleted();
 
   // unsubscribe from topics
-  await bus.unsubscribe(["some/topic1", "topic2"]).waitCompleted();
+  const req2 = await bus.unsubscribe(["some/topic1", "topic2"]);
+  await req2.waitCompleted();
 
   // send one-to-one message
-  await bus.send("target", Buffer.from("hello")).waitCompleted();
+  const req3 = await bus.send("target", Buffer.from("hello"));
+  await req3.waitCompleted();
 
   // disconnect
   await bus.disconnect();
@@ -90,8 +93,8 @@ const main = async () => {
   await rpc.call0("target", "test", msgpack.pack(payload));
   // call rpc test method and wait for the response
   try {
-    const response =
-        await rpc.call("target", "test", msgpack.pack(payload))).waitCompleted();
+    const req = await rpc.call("target", "test", msgpack.pack(payload));
+    const result = await req.waitCompleted();
     console.log(msgpack.unpack(result.getPayload().toString()));
   } catch (err) {
     console.log(err.code, err.message.toString());
