@@ -1,8 +1,9 @@
 {
     "$schema": "https://typedoc.org/schema.json",
-    "name": "BMAT",
+    "name": "BUS/RT JavaScript/TypeScript client",
     "entryPoints": ["./src/*.ts"],
     "navigationLinks": {
-        "GitHub": "https://github.com/eva-ics/bmat/bindings/js/busrt"
+        "GitHub": "https://github.com/alttch/busrt/tree/main/bindings/js/busrt",
+        "BUS/RT": "https://info.bma.ai/en/actual/busrt/"
     }
 }
