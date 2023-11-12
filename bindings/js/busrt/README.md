@@ -105,3 +105,7 @@ const main = async () => {
 
 main();
 ```
+
+## API reference
+
+<https://pub.bma.ai/dev/docs/bmat/>
