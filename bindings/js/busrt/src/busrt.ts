@@ -321,7 +321,9 @@ export class Rpc {
   /** Method, called on incoming RPC notifications */
   onNotification?: (notification: RpcEvent) => void;
   /** Method, called on incoming RPC calls */
-  onCall?: (call: RpcEvent) => Promise<Buffer | null | undefined>;
+  onCall?: (call: RpcEvent) => Promise<Buffer | undefined>;
+  blockingNotifications: boolean;
+  blockingFrames: boolean;
 
   /**
    * @param {Bus} client - Bus client
@@ -340,6 +342,8 @@ export class Rpc {
         Buffer.from("RPC engine not intialized")
       );
     };
+    this.blockingNotifications = false;
+    this.blockingFrames = false;
   }
 
   /**
@@ -449,7 +453,11 @@ export class Rpc {
       if (opCode == RpcOp.Notification) {
         if (me.onNotification) {
           const ev = new RpcEvent(opCode, frame, 1);
-          await me.onNotification(ev);
+          if (me.blockingNotifications) {
+            await me.onNotification(ev);
+          } else {
+            process.nextTick(() => (me as any).onNotification(ev));
+          }
         }
       } else if (opCode == RpcOp.Request) {
         const sender = frame.sender;
@@ -527,7 +535,12 @@ export class Rpc {
         throw `Invalid RPC frame code ${opCode}`;
       }
     } else if (me.onFrame) {
-      process.nextTick(() => (me as any).onFrame(frame));
+      const ev = new RpcEvent(RpcOp.Request, frame, 1);
+      if (me.blockingFrames) {
+        await me.onFrame(ev);
+      } else {
+        process.nextTick(() => (me as any).onFrame(frame));
+      }
     }
   }
 }
