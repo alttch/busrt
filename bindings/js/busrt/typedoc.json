@@ -1,9 +1,11 @@
 {
-    "$schema": "https://typedoc.org/schema.json",
-    "name": "BUS/RT JS",
-    "entryPoints": ["./src/*.ts"],
-    "navigationLinks": {
-        "GitHub": "https://github.com/alttch/busrt/tree/main/bindings/js/busrt",
-        "BUS/RT": "https://info.bma.ai/en/actual/busrt/"
-    }
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "BUS/RT JS",
+  "entryPoints": ["./src/*.ts"],
+  "navigationLinks": {
+    "GitHub": "https://github.com/alttch/busrt/tree/main/bindings/js/busrt"
+  },
+  "sidebarLinks": {
+    "BUS/RT": "https://info.bma.ai/en/actual/busrt/"
+  }
 }

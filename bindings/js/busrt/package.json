@@ -1,6 +1,6 @@
 {
   "name": "busrt",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "JavaScript/Typescript client for BUS/RT",
   "repository": {
     "type": "git",

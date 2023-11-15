@@ -317,11 +317,11 @@ export class Rpc {
   /** @ignore */
   calls: Map<number, RpcOpResult>;
   /** Method, called on incoming frames */
-  onFrame?: (frame: RpcEvent) => void;
+  onFrame?: (frame: RpcEvent) => Promise<void> | void;
   /** Method, called on incoming RPC notifications */
-  onNotification?: (notification: RpcEvent) => void;
+  onNotification?: (notification: RpcEvent) => Promise<void> | void;
   /** Method, called on incoming RPC calls */
-  onCall?: (call: RpcEvent) => Promise<Buffer | undefined>;
+  onCall: (call: RpcEvent) => Promise<Buffer | undefined> | Buffer | undefined;
   blockingNotifications: boolean;
   blockingFrames: boolean;
 
