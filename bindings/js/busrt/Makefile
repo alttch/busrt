@@ -4,7 +4,7 @@ all:
 bump:
 	npm version --no-git-tag-version patch
 
-pub: all upload
+pub: all upload doc
 
 upload:
 	npm publish --access public
