@@ -1,7 +1,7 @@
 const net = require("net");
-const sleep = require("sleep-promise");
-const { Mutex, Releaser } = require("async-mutex");
-const { PromiseSocket } = require("promise-socket");
+import sleep from "sleep-promise";
+import { Mutex } from "async-mutex";
+import { PromiseSocket } from "promise-socket";
 
 const GREETINGS = 0xeb;
 const PROTOCOL_VERSION = 1;
@@ -103,11 +103,11 @@ export class OpResult {
   /** @ignore */
   qos: QoS;
   /** @ignore */
-  locker: typeof Mutex;
+  locker?: Mutex;
   /** @ignore */
   result?: number;
   /** @ignore */
-  release?: Promise<typeof Releaser>;
+  release?: Promise<any>;
 
   /** @ignore */
   constructor(qos: QoS = QoS.No) {
@@ -128,7 +128,7 @@ export class OpResult {
 
   /** @ignore */
   async lock(): Promise<void> {
-    this.release = await this.locker.acquire();
+    this.release = (await this.locker?.acquire()) as any;
   }
 
   /** @ignore */
@@ -136,8 +136,10 @@ export class OpResult {
     if ((this.qos & 0b1) == 0) {
       return;
     }
-    const r = await this.locker.acquire();
-    r();
+    const r = await this.locker?.acquire();
+    if (r) {
+      r();
+    }
     return this.result;
   }
 
@@ -157,13 +159,13 @@ export class OpResult {
 
 export class RpcOpResult {
   /** @ignore */
-  completed: typeof Mutex;
+  completed: Mutex;
   /** @ignore */
   frame?: Frame;
   /** @ignore */
   error?: BusError;
   /** @ignore */
-  release?: Promise<typeof Releaser>;
+  release?: Promise<any>;
 
   /** @ignore */
   constructor() {
@@ -181,7 +183,7 @@ export class RpcOpResult {
 
   /** @ignore */
   async lock(): Promise<void> {
-    this.release = await this.completed.acquire();
+    this.release = (await this.completed.acquire()) as any;
   }
 
   /**
@@ -313,7 +315,7 @@ export class Rpc {
   /** @ignore */
   callId: number;
   /** @ignore */
-  call_lock: typeof Mutex;
+  call_lock: Mutex;
   /** @ignore */
   calls: Map<number, RpcOpResult>;
   /** Method, called on incoming frames */
@@ -560,15 +562,15 @@ export class Bus {
   /** bus timeout */
   timeout: number;
   /** @ignore */
-  mgmt_lock: typeof Mutex;
+  mgmt_lock: Mutex;
   /** @ignore */
-  socket_lock: typeof Mutex;
+  socket_lock: Mutex;
   /** @ignore */
   frameId: number;
   /** @ignore */
   frames: Map<number, OpResult>;
   /** @ignore */
-  socket: typeof PromiseSocket;
+  socket: PromiseSocket<any>;
 
   /**
    * @param {string} name - client name
@@ -585,6 +587,7 @@ export class Bus {
     this.socket_lock = new Mutex();
     this.frameId = 0;
     this.frames = new Map();
+    this.socket = undefined as any;
   }
 
   /**
@@ -603,6 +606,9 @@ export class Bus {
       //this.socket.setTimeout(this.timeout * 1000);
       await this.socket.connect(path);
       const header = await this.socket.read(3);
+      if (header === undefined) {
+        throw "I/O error";
+      }
       if (header[0] != GREETINGS) {
         throw "Unsupported protocol";
       }
@@ -611,7 +617,7 @@ export class Bus {
         throw "Unsupported protocol version";
       }
       await this.socket.writeAll(header);
-      let code = (await this.socket.read(1))[0];
+      let code = ((await this.socket.read(1)) as Buffer)[0];
       if (code != RESPONSE_OK) {
         throw `Server response ${code}`;
       }
@@ -620,7 +626,7 @@ export class Bus {
       len_buf.writeUInt16LE(buf.length);
       await this.socket.writeAll(len_buf);
       await this.socket.writeAll(buf);
-      code = (await this.socket.read(1))[0];
+      code = ((await this.socket.read(1)) as Buffer)[0];
       if (code != RESPONSE_OK) {
         throw `Server response ${code}`;
       }
@@ -637,7 +643,7 @@ export class Bus {
     try {
       let socket = me.socket;
       while (me.connected) {
-        const buf = await socket.read(6);
+        const buf = (await socket.read(6)) as Buffer;
         if (buf[0] == BusOp.Nop) {
           continue;
         } else if (buf[0] == BusOp.Ack) {
@@ -653,7 +659,7 @@ export class Bus {
         } else {
           let frame = new Frame(buf[0]);
           let frame_len = buf.readUInt32LE(1);
-          frame.payload = await socket.read(frame_len);
+          frame.payload = (await socket.read(frame_len)) as Buffer;
           if (frame.payload?.length != frame_len) {
             console.warn(
               `broken BUS/RT frame: ${frame.payload?.length} / ${frame_len}`

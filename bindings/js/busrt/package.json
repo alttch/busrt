@@ -7,7 +7,7 @@
     "url": "git+https://github.com/alttch/busrt.git"
   },
   "scripts": {
-    "build": "vite build && tsc src/*.ts --declaration --emitDeclarationOnly --declarationDir dist/"
+    "build": "vite build && tsc src/*.ts --declaration --skipLibCheck --esModuleInterop --emitDeclarationOnly --declarationDir dist/"
   },
   "main": "dist/busrt.umd.js",
   "module": "dist/busrt.mjs",
