@@ -6,6 +6,5 @@ export default defineConfig({
       entry: "./src/busrt.ts",
       name: "busrt"
     },
-    formats: ["es", "cjs"]
   }
 });
