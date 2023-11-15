@@ -539,7 +539,7 @@ export class Rpc {
       if (me.blockingFrames) {
         await me.onFrame(ev);
       } else {
-        process.nextTick(() => (me as any).onFrame(frame));
+        process.nextTick(() => (me as any).onFrame(ev));
       }
     }
   }
