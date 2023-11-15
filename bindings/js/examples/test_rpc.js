@@ -40,11 +40,11 @@ const onCall = async (ev) => {
 };
 
 // frame handler (broadcasts and topics)
-const onFrame = async (frame) => {
-  const payload = frame.getPayload();
+const onFrame = async (ev) => {
+  const payload = ev.frame.getPayload();
   console.log(
-    frame.primary_sender,
-    frame.topic,
+    ev.frame.primary_sender,
+    ev.frame.topic,
     payload.length > 0 ? msgpack.unpack(payload) : null
   );
 };
