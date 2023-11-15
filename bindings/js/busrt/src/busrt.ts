@@ -552,7 +552,7 @@ export class Bus {
   /** assigned name */
   name: string;
   /** called on incoming frames */
-  onFrame?: (frame: Frame) => void;
+  onFrame?: (frame: Frame) => Promise<void> | void;
   /** called on disconnect */
   onDisconnect?: () => void;
   /** broker ping interval */
