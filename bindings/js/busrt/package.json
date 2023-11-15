@@ -39,6 +39,7 @@
     "vite": "^4.5.0"
   },
   "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
     "@types/node": "^20.9.0"
   }
 }

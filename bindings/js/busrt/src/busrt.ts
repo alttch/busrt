@@ -1,4 +1,4 @@
-const net = require("net");
+import { Socket } from "node:net";
 import sleep from "sleep-promise";
 import { Mutex } from "async-mutex";
 import { PromiseSocket } from "promise-socket";
@@ -600,7 +600,7 @@ export class Bus {
   async connect(path: string): Promise<void> {
     const release = await this.mgmt_lock.acquire();
     try {
-      const sock = new net.Socket();
+      const sock = new Socket();
       sock.setNoDelay(true);
       this.socket = new PromiseSocket(sock);
       //this.socket.setTimeout(this.timeout * 1000);
