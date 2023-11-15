@@ -1,19 +1,17 @@
 "use strict";
 
 // payloads will be packed/unpacked as msgpack
-const msgpack = require("msgpackr");
-const sleep = require("sleep-promise");
+import * as msgpack from "msgpackr";
+import sleep from "sleep-promise";
 
-const {
+import {
   Bus,
   Rpc,
   Frame,
-  BusOp,
   QoS,
-  RpcRequest,
   BusError,
   BusErrorCode
-} = require("../busrt/");
+} from "busrt";
 
 // RPC notification handler
 const onNotification = async (ev) => {

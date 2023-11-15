@@ -1,17 +1,17 @@
 "use strict";
 
-const ntqdm = require("ntqdm");
-const sleep = require("sleep-promise");
+import ntqdm from "ntqdm";
+import sleep from "sleep-promise";
 
-const { Bus, Frame, BusOp, QoS } = require("../busrt/");
+import { Bus, Frame, QoS } from "busrt";
 
 const onDisconnect = async () => {
   console.log("BUS/RT disconnected");
 };
 
 const onFrame = async (frame) => {
-  console.log(frame, frame.getPayload().toString());
-}
+  //console.log(frame, frame.getPayload().toString());
+};
 
 function* generator(steps) {
   let index = 0;
@@ -27,22 +27,23 @@ const test = async () => {
   bus.onFrame = onFrame;
   //await bus.connect(("localhost", 9924));
   await bus.connect("/tmp/busrt.sock");
-  let op = await bus.subscribe(["#"]);
+  const op = await bus.subscribe(["#"]);
+  console.log(await op.waitCompleted());
+  const op2 = await bus.unsubscribe(["#"]);
   console.log(await op.waitCompleted());
   //op = await bus.unsubscribe(["#"]);
   //console.log(await op.waitCompleted());
   //while (bus.isConnected()) {
-    //console.log(bus.isConnected());
-    //await sleep(1000);
+  //console.log(bus.isConnected());
+  //await sleep(1000);
   //}
   //return;
   let iters = 200_000;
-  let msg = new Frame(BusOp.Message, QoS.No);
-  msg.payload = Buffer.from("hello");
+  const payload = "hello";
   let start = new Date().getTime() / 1000;
   var tdqm = ntqdm();
   for (let i of ntqdm(generator(iters), { total: iters, logging: true })) {
-    let op = await bus.send("y", msg);
+    const op = await bus.publish("test", payload, QoS.Processed);
     await op.waitCompleted();
   }
   const elapsed = new Date().getTime() / 1000 - start;
