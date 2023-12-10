@@ -583,16 +583,23 @@ async fn main() {
             (rpc, payload)
         }};
     }
+    let timeout = Duration::from_secs_f32(opts.timeout);
+    macro_rules! wto {
+        ($fut: expr) => {
+            tokio::time::timeout(timeout, $fut)
+                .await
+                .expect("timed out")
+        };
+    }
     match opts.command {
         Command::Broker(ref op) => {
             let client = create_client(&opts, &client_name).await;
             match op {
                 BrokerCommand::ClientList => {
                     let rpc = RpcClient::new(client, DummyHandlers {});
-                    let result = rpc
-                        .call(".broker", "client.list", empty_payload!(), QoS::Processed)
-                        .await
-                        .unwrap();
+                    let result =
+                        wto!(rpc.call(".broker", "client.list", empty_payload!(), QoS::Processed))
+                            .unwrap();
                     let mut clients: ClientList = rmp_serde::from_slice(result.payload()).unwrap();
                     clients.clients.sort();
                     let mut table = ctable(vec![
@@ -619,10 +626,9 @@ async fn main() {
                 }
                 BrokerCommand::Stats => {
                     let rpc = RpcClient::new(client, DummyHandlers {});
-                    let result = rpc
-                        .call(".broker", "stats", empty_payload!(), QoS::Processed)
-                        .await
-                        .unwrap();
+                    let result =
+                        wto!(rpc.call(".broker", "stats", empty_payload!(), QoS::Processed))
+                            .unwrap();
                     let stats: BrokerStats = rmp_serde::from_slice(result.payload()).unwrap();
                     let mut table = ctable(vec!["field", "value"]);
                     table.add_row(row!["r_frames", stats.r_frames]);
@@ -634,10 +640,9 @@ async fn main() {
                 }
                 BrokerCommand::Info => {
                     let rpc = RpcClient::new(client, DummyHandlers {});
-                    let result = rpc
-                        .call(".broker", "info", empty_payload!(), QoS::Processed)
-                        .await
-                        .unwrap();
+                    let result =
+                        wto!(rpc.call(".broker", "info", empty_payload!(), QoS::Processed))
+                            .unwrap();
                     let info: BrokerInfo = rmp_serde::from_slice(result.payload()).unwrap();
                     let mut table = ctable(vec!["field", "value"]);
                     table.add_row(row!["author", info.author]);
@@ -646,10 +651,9 @@ async fn main() {
                 }
                 BrokerCommand::Test => {
                     let rpc = RpcClient::new(client, DummyHandlers {});
-                    let result = rpc
-                        .call(".broker", "test", empty_payload!(), QoS::Processed)
-                        .await
-                        .unwrap();
+                    let result =
+                        wto!(rpc.call(".broker", "test", empty_payload!(), QoS::Processed))
+                            .unwrap();
                     print_payload(result.payload(), opts.silent).await;
                 }
             }
@@ -682,20 +686,19 @@ async fn main() {
             } else {
                 client.send(&cmd.target, payload.into(), QoS::Processed)
             };
-            fut.await.unwrap().unwrap().await.unwrap().unwrap();
+            wto!(wto!(fut).unwrap().unwrap()).unwrap().unwrap();
             ok!();
         }
         Command::Publish(ref cmd) => {
             let mut client = create_client(&opts, &client_name).await;
             let payload = get_payload(&cmd.payload).await;
-            client
-                .publish(&cmd.topic, payload.into(), QoS::Processed)
-                .await
-                .unwrap()
-                .unwrap()
-                .await
-                .unwrap()
-                .unwrap();
+            wto!(
+                wto!(client.publish(&cmd.topic, payload.into(), QoS::Processed))
+                    .unwrap()
+                    .unwrap()
+            )
+            .unwrap()
+            .unwrap();
             ok!();
         }
         Command::Rpc(ref r) => {
@@ -717,32 +720,29 @@ async fn main() {
                 RpcCommand::Notify(cmd) => {
                     let rpc = RpcClient::new(client, DummyHandlers {});
                     let payload = get_payload(&cmd.payload).await;
-                    rpc.notify(&cmd.target, payload.into(), QoS::Processed)
-                        .await
-                        .unwrap()
-                        .unwrap()
-                        .await
-                        .unwrap()
-                        .unwrap();
+                    wto!(
+                        wto!(rpc.notify(&cmd.target, payload.into(), QoS::Processed))
+                            .unwrap()
+                            .unwrap()
+                    )
+                    .unwrap()
+                    .unwrap();
                     ok!();
                 }
                 RpcCommand::Call0(cmd) => {
                     let (rpc, payload) = prepare_rpc_call!(cmd, client);
-                    rpc.call0(&cmd.target, &cmd.method, payload.into(), QoS::Processed)
-                        .await
-                        .unwrap()
-                        .unwrap()
-                        .await
-                        .unwrap()
-                        .unwrap();
+                    wto!(
+                        wto!(rpc.call0(&cmd.target, &cmd.method, payload.into(), QoS::Processed))
+                            .unwrap()
+                            .unwrap()
+                    )
+                    .unwrap()
+                    .unwrap();
                     ok!();
                 }
                 RpcCommand::Call(cmd) => {
                     let (rpc, payload) = prepare_rpc_call!(cmd, client);
-                    match rpc
-                        .call(&cmd.target, &cmd.method, payload.into(), QoS::Processed)
-                        .await
-                    {
+                    match wto!(rpc.call(&cmd.target, &cmd.method, payload.into(), QoS::Processed)) {
                         Ok(result) => print_payload(result.payload(), opts.silent).await,
                         Err(e) => {
                             let message = e
