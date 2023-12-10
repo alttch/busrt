@@ -200,6 +200,9 @@ macro_rules! connect_broker {
 
 impl Client {
     pub async fn connect(config: &Config) -> Result<Self, Error> {
+        tokio::time::timeout(config.timeout, Self::connect_broker(config)).await?
+    }
+    async fn connect_broker(config: &Config) -> Result<Self, Error> {
         let responses: ResponseMap = <_>::default();
         let connected = Arc::new(atomic::AtomicBool::new(true));
         #[allow(clippy::case_sensitive_file_extension_comparisons)]
