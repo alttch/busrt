@@ -281,7 +281,7 @@ checksum = "c1ad822118d20d2c234f427000d5acc36eabe1e29a348c89b63dd60b13f28e5d"
 
 [[package]]
 name = "busrt"
-version = "0.4.7"
+version = "0.4.8"
 dependencies = [
  "async-channel",
  "async-io",
