@@ -9,7 +9,7 @@ class FutureSoket {
   Future<void> connect(InternetAddress host, int port, Duration timeout) async {
     _socket = await Socket.connect(host, port, timeout: timeout);
     _socket?.listen((e) { _buffer.addAll(e); });
-    _socket?.drain().then((_) async => await disconnect());
+    // _socket?.drain().then((_) async => await disconnect());
   }
 
   bool isConnected() => _socket is Socket;
@@ -30,7 +30,7 @@ class FutureSoket {
       throw SocketException.closed();
     }
 
-    _socket!.write(buf);
+    _socket!.add(buf);
   }
 
   Future<void> disconnect() async {

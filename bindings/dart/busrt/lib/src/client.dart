@@ -67,7 +67,7 @@ class Bus {
 
   bool isConnected() => _connected && _soket.isConnected();
 
-  set onFrame(void Function(Frame frame)? fn) {
+  set onFrame(FutureOr<void> Function(Frame frame)? fn) {
     _onFrame = fn;
   }
 
@@ -215,6 +215,9 @@ class Bus {
     _soket.write(Uint8Buffer()
       ..addAll(nameLen)
       ..addAll(name));
+
+    buf = await _soket.read(1);
+    
     if (buf[0] != responseOk) {
       throw buf[0].toErrKind("Server greetings response: {$buf[0]}")!;
     }
@@ -273,21 +276,20 @@ class Bus {
     if (i == -1) {
       throw DataError("Invalid BUS/RT frame");
     }
-
-    final sender = _utf8decoder.convert(buf.getRange(0, i).toList());
+    final sender = _utf8decoder.convert(payload.getRange(0, i).toList());
     final primarySender = sender.split(secondarySep).first;
     i += 1;
 
     String? topic;
 
     if (frameKind == FrameKind.publish) {
-      final t = buf.skip(i).toList().indexOf(0);
+      final t = payload.skip(i).toList().indexOf(0);
 
       if (t == -1) {
         throw DataError("Invalid BUS/RT frame");
       }
 
-      topic = _utf8decoder.convert(buf.getRange(i, i + t).toList());
+      topic = _utf8decoder.convert(payload.getRange(i, i + t).toList());
       i = t + 1;
     }
 
@@ -296,7 +298,7 @@ class Bus {
     if (_onFrame is Function) {
       final frame = Frame(
         kind: frameKind,
-        buf: buf,
+        buf: payload,
         payloadPos: payloadPos,
         qos: buf[5].toQos(),
         sender: sender,
