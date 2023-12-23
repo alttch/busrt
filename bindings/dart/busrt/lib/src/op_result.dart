@@ -1,17 +1,31 @@
+import 'package:busrt/src/error_kind.dart';
 import 'package:busrt/src/qos.dart';
+import 'package:mutex/mutex.dart';
 
 class OpResult {
   final QoS _qos;
-  int? _result;
+  final _loc = Mutex();
+  late final ErrorKind? _result;
 
   OpResult(this._qos);
 
-  set result(int? v) {
-    _result = v;
+  void setResult(int r) {
+    _result = r.toErrKind("Ask Err");
   }
 
-  Future<int?> waitCompletedCode() async {
-    // TODO
-    throw UnimplementedError();
+  Future<void> loc() async => await _loc.acquire();
+
+  void unloc() => _loc.release();
+
+  Future<void> waitCompletedCode() async {
+    if (!_qos.needsAck()) {
+      return;
+    }
+      await _loc.acquire();
+      _loc.release();
+      
+    if (_result != null) {
+      throw _result;
+    }
   }
 }

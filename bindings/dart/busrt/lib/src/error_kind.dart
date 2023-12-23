@@ -143,11 +143,11 @@ class EofError extends ErrorKind {
 }
 
 extension IntoBusRtResult on int {
-  ErrorKind? toBusrtResult() {
+  ErrorKind? toErrKind([mesage]) {
     if (this == responseOk) {
       return null;
     }
 
-    return ErrorKind.fromInt(this);
+    return ErrorKind.fromInt(this, mesage);
   }
 }

@@ -1,5 +1,4 @@
-use crate::borrow::Cow;
-use crate::comm::{Flush, TtlBufWriter};
+se crate::comm::{Flush, TtlBufWriter};
 use crate::Error;
 use crate::EventChannel;
 use crate::IntoBusRtResult;
