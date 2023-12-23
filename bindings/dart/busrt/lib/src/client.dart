@@ -56,7 +56,7 @@ class Bus {
     Uint8Buffer? payload,
     QoS qos = QoS.processed,
   ]) async {
-    final frame = Frame(
+    final frame = Frame(  
       kind: FrameKind.message,
       qos: qos,
       buf: payload ?? Uint8Buffer(),
@@ -73,6 +73,19 @@ class Bus {
 
   set onDisconnect(void Function()? fn) {
     _onDisconnect = fn;
+  }
+
+  Future<void> disconnect() async {
+    await _connLoc.acquire();
+    final connected = isConnected();
+    try {
+      await _disconnect();
+    } finally {
+      _connLoc.release();
+      if (connected && _onDisconnect is Function) {
+        _onDisconnect!();
+      }
+    }
   }
 
   Future<OpResult> _send(Frame frame, [List<String>? targets]) async {
@@ -129,11 +142,10 @@ class Bus {
           return o;
       }
     } catch (e) {
-      //TODO
       _frames.remove(frameId);
-      throw "err";
+      rethrow;
     } finally {
-      _sendLoc.acquire();
+      _sendLoc.release();
     }
   }
 
@@ -214,8 +226,9 @@ class Bus {
     await _sendLoc.acquire();
     try {
       _soket.write(pingFrame);
-    } catch (e) {
-      t.cancel(); //TODO
+    } catch (e, s) {
+      t.cancel();
+      await _handleDaemonException(e, s);
     } finally {
       _sendLoc.release();
     }
@@ -232,9 +245,9 @@ class Bus {
         default:
           return await _incomingMessageHandler(buf);
       }
-    } catch (e) {
+    } catch (e, s) {
       t.cancel();
-      // TODO
+      await _handleDaemonException(e, s);
     }
   }
 
@@ -292,6 +305,27 @@ class Bus {
       );
 
       _onFrame!(frame);
+    }
+  }
+
+  Future<void> _disconnect() async {
+    await _soket.disconnect();
+    _connected = false;
+  }
+
+  Future<void> _handleDaemonException(Object e, StackTrace s) async {
+    await _connLoc.acquire();
+    final connect = isConnected();
+    try {
+      await _disconnect();
+    } finally {
+      _connLoc.release();
+      if (connect) {
+        print({"err": e, "st": s});
+        if (_onDisconnect is Function) {
+          _onDisconnect!();
+        }
+      }
     }
   }
 }
