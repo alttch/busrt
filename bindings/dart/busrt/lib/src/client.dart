@@ -21,13 +21,13 @@ class Bus {
   final _connLoc = Mutex();
   final _sendLoc = Mutex();
   int _frameId = 0;
-  
+
   final _utf8decoder = Utf8Decoder();
   final _utf8encoder = Utf8Encoder();
 
-  final frames = <int, OpResult>{};
+  final _frames = <int, OpResult>{};
   final _soket = FutureSoket();
-  void Function(Frame frame)? _onFrame;
+  FutureOr<void> Function(Frame frame)? _onFrame;
   void Function()? _onDisconnect;
 
   Bus(
@@ -51,6 +51,20 @@ class Bus {
     }
   }
 
+  Future<OpResult> send(
+    String target, [
+    Uint8Buffer? payload,
+    QoS qos = QoS.processed,
+  ]) async {
+    final frame = Frame(
+      kind: FrameKind.message,
+      qos: qos,
+      buf: payload ?? Uint8Buffer(),
+    );
+
+    return _send(frame, [target]);
+  }
+
   bool isConnected() => _connected && _soket.isConnected();
 
   set onFrame(void Function(Frame frame)? fn) {
@@ -61,12 +75,85 @@ class Bus {
     _onDisconnect = fn;
   }
 
-  void _incrementFrameId() {
+  Future<OpResult> _send(Frame frame, [List<String>? targets]) async {
+    await _sendLoc.acquire();
+
+    late final int frameId;
+    try {
+      frameId = _incrementFrameId();
+      final o = OpResult(frame.qos);
+      if (frame.qos.needsAck()) {
+        await o.loc();
+        _frames[frameId] = o;
+      }
+
+      final flags = frame.kind.value | (frame.qos.value << 6);
+
+      switch (frame.kind) {
+        case FrameKind.unsubscribeTopic || FrameKind.subscribeTopic:
+          final payload =
+              _utf8encoder.convert(targets?.join(String.fromCharCode(0)) ?? "");
+          final header = _sendHeader(frameId, flags, payload.length);
+          _soket.write(Uint8Buffer()
+            ..addAll(header)
+            ..addAll(payload));
+
+          return o;
+
+        default:
+          final targetBuf = _utf8encoder.convert(targets?.first ?? "");
+          final frameLen = targetBuf.length +
+              frame.payload.length +
+              1 +
+              (frame.header?.length ?? 0);
+
+          if (frameLen > 0xffffffff) {
+            throw DataError("frame too large");
+          }
+
+          final header = _sendHeader(frameId, flags, frameLen);
+          final bufs = Uint8Buffer()
+            ..addAll(header)
+            ..addAll(targetBuf)
+            ..add(0);
+          if (frame.header != null) {
+            bufs.addAll(frame.header!);
+          }
+
+          _soket.write(bufs);
+
+          if (frame.payload.isNotEmpty) {
+            _soket.write(frame.payload);
+          }
+
+          return o;
+      }
+    } catch (e) {
+      //TODO
+      _frames.remove(frameId);
+      throw "err";
+    } finally {
+      _sendLoc.acquire();
+    }
+  }
+
+  Uint8Buffer _sendHeader(int frameId, int flags, int payloadLen) {
+    final header = Uint8Buffer();
+    header.addAll(Uint32List.fromList([frameId]).buffer.asUint8List());
+    header.add(flags);
+    header.addAll(Uint32List.fromList([payloadLen]).buffer.asUint8List());
+
+    return header;
+  }
+
+  int _incrementFrameId() {
     if (_frameId >= 0xffffffff) {
       _frameId = 1;
     } else {
       _frameId += 1;
     }
+
+    return _frameId;
   }
 
   (InternetAddress, int) _hostAndPortFromPath(String path) {
@@ -154,7 +241,7 @@ class Bus {
   void _askHandler(Uint8Buffer buf) {
     final opIdBbuf = Uint8Buffer()..addAll(buf.getRange(1, 5));
     final opId = opIdBbuf.buffer.asUint32List().first;
-    final res = frames.remove(opId);
+    final res = _frames.remove(opId);
     if (res is OpResult) {
       res.setResult(buf[5]);
       res.unloc();
@@ -168,7 +255,7 @@ class Bus {
     final frameLenBuf = Uint8Buffer()..addAll(buf.getRange(1, 5));
     final frameLen = frameLenBuf.buffer.asUint32List().first;
     final payload = await _soket.read(frameLen);
-    
+
     var i = payload.indexOf(0);
     if (i == -1) {
       throw DataError("Invalid BUS/RT frame");
@@ -177,11 +264,10 @@ class Bus {
     final sender = _utf8decoder.convert(buf.getRange(0, i).toList());
     final primarySender = sender.split(secondarySep).first;
     i += 1;
-    
+
     String? topic;
 
     if (frameKind == FrameKind.publish) {
-
       final t = buf.skip(i).toList().indexOf(0);
 
       if (t == -1) {
@@ -199,7 +285,7 @@ class Bus {
         kind: frameKind,
         buf: buf,
         payloadPos: payloadPos,
-        realtime: buf[5].toQos().isRealtime(),
+        qos: buf[5].toQos(),
         sender: sender,
         primarySender: primarySender,
         topic: topic,
@@ -207,7 +293,5 @@ class Bus {
 
       _onFrame!(frame);
     }
-    
-
   }
 }

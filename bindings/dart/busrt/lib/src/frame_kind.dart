@@ -2,11 +2,12 @@ import 'package:busrt/src/consts.dart';
 import 'package:busrt/src/error_kind.dart';
 
 enum FrameKind {
-  prepared(0xff),
   message(opMessage),
   broadcast(opBroadcast),
   publish(opPublish),
   acknowledge(opAck),
+  subscribeTopic(opSubscribe),
+  unsubscribeTopic(opUnsubscribe),
   nop(opNop);
 
   final int value;
@@ -21,6 +22,8 @@ extension ToFrameKind on int {
         opPublish => FrameKind.publish,
         opAck => FrameKind.acknowledge,
         opNop => FrameKind.nop,
+        opSubscribe => FrameKind.subscribeTopic,
+        opUnsubscribe => FrameKind.unsubscribeTopic,
         _ => throw DataError("Invalid frame type: $this"),
       };
 }

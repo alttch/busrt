@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:busrt/src/consts.dart';
 import 'package:busrt/src/frame_kind.dart';
+import 'package:busrt/src/qos.dart';
 import 'package:typed_data/typed_data.dart';
 
 
@@ -13,12 +14,13 @@ class Frame {
   final Uint8Buffer? _header;
   final Uint8Buffer _buf;
   final int _payloadPos;
-  final bool _realtime;
+  final QoS _qos;
 
   Frame({
     required FrameKind kind,
+    required QoS qos,
     required Uint8Buffer buf,
-    required int payloadPos,
+    int payloadPos = 0,
     bool realtime = false,
     String? sender,
     String? primarySender,
@@ -28,7 +30,7 @@ class Frame {
     _kind = kind,
     _buf = buf,
     _payloadPos = payloadPos,
-    _realtime = realtime,
+    _qos = qos,
     _sender = sender,
     _primarySender = primarySender,
     _topic = topic,
@@ -36,16 +38,9 @@ class Frame {
 
   FrameKind get kind => _kind;
 
-  String get sender => _sender!;
+  String? get sender => _sender;
 
-  String primarySender() {
-    final index = _sender!.indexOf(secondarySep);
-    if (index == -1) {
-      return _sender;
-    }
-
-    return _sender.substring(0, index);
-  }
+  String? get primarySender => _primarySender;
 
   String? get topic => _topic;
 
@@ -53,5 +48,5 @@ class Frame {
 
   Uint8Buffer? get header => _header;
 
-  bool isRealtime() => _realtime;
+  QoS get qos => _qos;
 }
