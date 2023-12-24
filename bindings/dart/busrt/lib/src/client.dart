@@ -56,8 +56,11 @@ class Bus {
     Uint8Buffer? payload,
     QoS qos = QoS.processed,
   ]) async {
+    final frameKind = target.contains('*') || target.contains('?')
+      ? FrameKind.broadcast : FrameKind.message;
+
     final frame = Frame(
-      kind: FrameKind.message,
+      kind: frameKind,
       qos: qos,
       buf: payload ?? Uint8Buffer(),
     );
@@ -313,7 +316,7 @@ class Bus {
       }
 
       topic = _utf8decoder.convert(payload.getRange(i, i + t).toList());
-      i = t + 1;
+      i += (t + 1);
     }
 
     final payloadPos = i;
