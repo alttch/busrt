@@ -8,14 +8,19 @@ class FutureSoket {
 
   Future<void> connect(InternetAddress host, int port, Duration timeout) async {
     _socket = await Socket.connect(host, port, timeout: timeout);
-    _socket?.listen((e) { _buffer.addAll(e); });
-    // _socket?.drain().then((_) async => await disconnect());
+    _socket?.listen((e) => _buffer.addAll(e),
+        onError: (_) async => await disconnect(),
+        onDone: () async => await disconnect());
   }
 
   bool isConnected() => _socket is Socket;
 
   Future<Uint8Buffer> read(int len) async {
     while (_buffer.length < len) {
+      if (!isConnected()) {
+        print("SocketException: $len : ${_buffer.length}");
+        throw SocketException.closed();
+      }
       await Future.delayed(Duration.zero);
     }
 

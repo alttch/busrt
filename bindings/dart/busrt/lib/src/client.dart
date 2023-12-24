@@ -45,7 +45,7 @@ class Bus {
       await _connectionHandler();
 
       Future.microtask(() => Timer.periodic(_pingInterval, _ping));
-      Future.microtask(() => Timer.periodic(Duration.zero, _reader));
+      Future.microtask(_reader);
     } finally {
       _connLoc.release();
     }
@@ -56,13 +56,33 @@ class Bus {
     Uint8Buffer? payload,
     QoS qos = QoS.processed,
   ]) async {
-    final frame = Frame(  
+    final frame = Frame(
       kind: FrameKind.message,
       qos: qos,
       buf: payload ?? Uint8Buffer(),
     );
 
-    return _send(frame, [target]);
+    return await _send(frame, [target]);
+  }
+
+  Future<OpResult> subscribe(List<String> topics,
+      [QoS qos = QoS.processed]) async {
+    final frame = Frame(kind: FrameKind.subscribeTopic, qos: qos);
+
+    return await _send(frame, topics);
+  }
+
+  Future<OpResult> unsubscribe(List<String> topics,
+      [QoS qos = QoS.processed]) async {
+    final frame = Frame(kind: FrameKind.unsubscribeTopic, qos: qos);
+
+    return await _send(frame, topics);
+  }
+
+  Future<OpResult> publish(String topic,
+      [Uint8Buffer? payload, QoS qos = QoS.processed]) async {
+    final frame = Frame(kind: FrameKind.publish, qos: qos, buf: payload);
+    return await _send(frame, [topic]);
   }
 
   bool isConnected() => _connected && _soket.isConnected();
@@ -217,7 +237,7 @@ class Bus {
       ..addAll(name));
 
     buf = await _soket.read(1);
-    
+
     if (buf[0] != responseOk) {
       throw buf[0].toErrKind("Server greetings response: {$buf[0]}")!;
     }
@@ -237,20 +257,23 @@ class Bus {
     }
   }
 
-  Future<void> _reader(Timer t) async {
-    try {
-      final buf = await _soket.read(6);
-      switch (buf[0].toFrameKind()) {
-        case FrameKind.nop:
-          return;
-        case FrameKind.acknowledge:
-          return _askHandler(buf);
-        default:
-          return await _incomingMessageHandler(buf);
+  Future<void> _reader() async {
+    while (isConnected()) {
+      try {
+        final buf = await _soket.read(6);
+        switch (buf[0].toFrameKind()) {
+          case FrameKind.nop:
+            continue;
+          case FrameKind.acknowledge:
+            _askHandler(buf);
+            continue;
+          default:
+            await _incomingMessageHandler(buf);
+            continue;
+        }
+      } catch (e, s) {
+        await _handleDaemonException(e, s);
       }
-    } catch (e, s) {
-      t.cancel();
-      await _handleDaemonException(e, s);
     }
   }
 

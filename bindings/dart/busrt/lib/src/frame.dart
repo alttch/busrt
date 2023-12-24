@@ -1,6 +1,3 @@
-import 'dart:typed_data';
-
-import 'package:busrt/src/consts.dart';
 import 'package:busrt/src/frame_kind.dart';
 import 'package:busrt/src/qos.dart';
 import 'package:typed_data/typed_data.dart';
@@ -19,7 +16,7 @@ class Frame {
   Frame({
     required FrameKind kind,
     required QoS qos,
-    required Uint8Buffer buf,
+    Uint8Buffer? buf,
     int payloadPos = 0,
     bool realtime = false,
     String? sender,
@@ -28,7 +25,7 @@ class Frame {
     Uint8Buffer? header,
   }) :
     _kind = kind,
-    _buf = buf,
+    _buf = buf ?? Uint8Buffer(),
     _payloadPos = payloadPos,
     _qos = qos,
     _sender = sender,
