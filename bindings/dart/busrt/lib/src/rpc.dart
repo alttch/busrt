@@ -6,7 +6,7 @@ class Rpc {
   final _callLock = Mutex();
   final _calls = <int, RpcOpResult>{};
 
-  FutureOr<void> Function(RpcEvent e)? _onEvent;
+  FutureOr<void> Function(Frame f)? _onFrane;
   FutureOr<void> Function(RpcEvent e)? _onNotification;
   FutureOr<Uint8Buffer?> Function(RpcEvent e) _onCall =
       (_) => throw RpcMethodNotFoundError("RPC engine not intialized");
@@ -32,6 +32,12 @@ class Rpc {
 
     return await _bus._send(notification, [target]);
   }
+
+  set onCall(FutureOr<Uint8Buffer?> Function(RpcEvent e) fn) => _onCall = fn;
+
+  set onNotification(FutureOr<void> Function(RpcEvent e)? fn) => _onNotification = fn;
+
+  set onFrame(FutureOr<void> Function(Frame f)? fn) => _onFrane = fn;
 
   Future<OpResult> call0(String target, String method,
       {Uint8Buffer? params, QoS qos = QoS.processed}) async {
@@ -72,13 +78,13 @@ class Rpc {
   }
 
   Future<void> _handleFrame(Frame frame) async {
-    if (frame.kind != FrameKind.message && _onEvent != null) {
-      final e = RpcEvent(RpcEventKind.request, frame, 1);
+    if (frame.kind != FrameKind.message && _onFrane != null) {
       if (_blockingFrames) {
-        await _onEvent!(e);
+        await _onFrane!(frame);
       } else {
-        Future.microtask(() => _onEvent!(e));
+        Future.microtask(() => _onFrane!(frame));
       }
+      return;
     }
 
     final eventKind = frame.payload[0].toRpcEventKind();

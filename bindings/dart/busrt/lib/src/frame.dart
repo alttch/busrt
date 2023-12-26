@@ -12,7 +12,7 @@ class Frame {
   final String? _topic;
   final Uint8Buffer? _header;
   final Uint8Buffer _buf;
-  final int _payloadPos;
+  int _payloadPos;
   final QoS _qos;
 
   Frame({
@@ -20,7 +20,6 @@ class Frame {
     required QoS qos,
     Uint8Buffer? buf,
     int payloadPos = 0,
-    bool realtime = false,
     String? sender,
     String? primarySender,
     String? topic,
@@ -93,5 +92,5 @@ class Frame {
 
   QoS get qos => _qos;
 
-  int get payloadPos => _payloadPos;
+  void addPayloadPos(int add) => _payloadPos += add;
 }
