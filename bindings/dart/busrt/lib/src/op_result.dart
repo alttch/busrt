@@ -17,7 +17,7 @@ class OpResult {
 
   void unloc() => _loc.release();
 
-  Future<void> waitCompletedCode() async {
+  Future<void> waitCompleted() async {
     if (!_qos.needsAck()) {
       return;
     }

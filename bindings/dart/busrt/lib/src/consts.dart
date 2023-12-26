@@ -23,6 +23,13 @@ const errBusy = 0x76;
 const errNotDelivered = 0x77;
 const errTimeout = 0x78;
 const errAccess = 0x79;
+const errRpcParse = -32700;
+const errRpcInvalidRequest = -32600;
+const errRpcMethodNotFound = -32601;
+const errRpcInvalidMethodParams = -32602;
+const errRpcInternal = -32603;
+const rpcErrorCodeNotFound = -32001;
+
 
 const greetings = 0xEB;
 
