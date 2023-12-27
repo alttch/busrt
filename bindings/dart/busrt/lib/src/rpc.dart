@@ -89,11 +89,11 @@ class Rpc {
   }
 
   Future<void> _handleFrame(Frame frame) async {
-    if (frame.kind != FrameKind.message && _onFrane != null) {
+    if (frame.kind != FrameKind.message) {
       if (_blockingFrames) {
-        await _onFrane!(frame);
+        await _onFrane?.call(frame);
       } else {
-        Future.microtask(() => _onFrane!(frame));
+        Future.microtask(() => _onFrane?.call(frame));
       }
       return;
     }
