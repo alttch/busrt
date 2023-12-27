@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:busrt/busrt.dart';
-import 'package:busrt/src/rpc_event_kind.dart';
 import 'package:typed_data/typed_data.dart';
 
 class RpcEvent {
@@ -22,4 +21,6 @@ class RpcEvent {
   String? get method => _method == null ? null : Utf8Decoder().convert(_method);
 
   int? get callId => _callId;
+
+  Frame? get frame => _frame;
 }

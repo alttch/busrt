@@ -99,8 +99,6 @@ class Rpc {
       default:
         throw RpcCodeNotFoundError("Invalid RPC frame code $eventKind");
     }
-
-    throw UnimplementedError();
   }
 
   Future<void> _notificationHandle(Frame frame) async {

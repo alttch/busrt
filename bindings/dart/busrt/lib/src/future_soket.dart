@@ -18,7 +18,6 @@ class FutureSoket {
   Future<Uint8Buffer> read(int len) async {
     while (_buffer.length < len) {
       if (!isConnected()) {
-        print("SocketException: $len : ${_buffer.length}");
         throw SocketException.closed();
       }
       await Future.delayed(Duration.zero);

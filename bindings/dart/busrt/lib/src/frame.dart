@@ -54,7 +54,7 @@ class Frame {
         _qos = qos,
         _buf = params ?? Uint8Buffer(),
         _header = Uint8Buffer()
-          ..add(FrameKind.message.value)
+          ..add(RpcEventKind.request.value)
           ..addAll(callId)
           ..addAll(Utf8Encoder().convert(method))
           ..addAll(Uint8Buffer(1)),
