@@ -1,20 +1,20 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:busrt/busrt.dart';
-import 'package:typed_data/typed_data.dart';
 
 class RpcEvent {
   final RpcEventKind _kind;
   final Frame _frame;
   final int _pyloadPos;
-  final Uint8Buffer? _method;
+  final Uint8List? _method;
   final int? _callId;
 
   RpcEvent(this._kind, this._frame, this._pyloadPos,
       [this._callId, this._method]);
 
-  Uint8Buffer get payload =>
-      Uint8Buffer()..addAll(_frame.payload.skip(_pyloadPos));
+  Uint8List get payload =>
+      Uint8List.fromList(_frame.payload.skip(_pyloadPos).toList());
 
   RpcEventKind get kind => _kind;
 

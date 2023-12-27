@@ -1,4 +1,4 @@
-import 'package:typed_data/typed_data.dart';
+import 'dart:typed_data';
 
 const int opNop = 0x00;
 const int opPublish = 0x01;
@@ -12,7 +12,7 @@ const int protocolVersion = 0x01;
 
 const int responseOk = 0x01;
 
-final pingFrame = Uint8Buffer()..addAll([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+final pingFrame = Uint8List.fromList([0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
 const errClientNotRegistered = 0x71;
 const errData = 0x72;

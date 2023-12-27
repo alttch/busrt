@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:typed_data/typed_data.dart';
 
@@ -15,7 +16,7 @@ class FutureSoket {
 
   bool isConnected() => _socket is Socket;
 
-  Future<Uint8Buffer> read(int len) async {
+  Future<Uint8List> read(int len) async {
     while (_buffer.length < len) {
       if (!isConnected()) {
         throw SocketException.closed();
@@ -23,13 +24,13 @@ class FutureSoket {
       await Future.delayed(Duration.zero);
     }
 
-    final buf = Uint8Buffer()..addAll(_buffer.take(len));
+    final buf = Uint8List.fromList(_buffer.take(len).toList());
     _buffer.removeRange(0, len);
 
     return buf;
   }
 
-  void write(Uint8Buffer buf) {
+  void write(Uint8List buf) {
     if (!isConnected()) {
       throw SocketException.closed();
     }

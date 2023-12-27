@@ -58,16 +58,17 @@ class Bus {
 
   Future<OpResult> send(
     String target, [
-    Uint8Buffer? payload,
+    Uint8List? payload,
     QoS qos = QoS.processed,
   ]) async {
     final frameKind = target.contains('*') || target.contains('?')
-      ? FrameKind.broadcast : FrameKind.message;
+        ? FrameKind.broadcast
+        : FrameKind.message;
 
     final frame = Frame(
       kind: frameKind,
       qos: qos,
-      buf: payload ?? Uint8Buffer(),
+      buf: payload ?? Uint8List(0),
     );
 
     return await _send(frame, [target]);
@@ -88,7 +89,7 @@ class Bus {
   }
 
   Future<OpResult> publish(String topic,
-      [Uint8Buffer? payload, QoS qos = QoS.processed]) async {
+      [Uint8List? payload, QoS qos = QoS.processed]) async {
     final frame = Frame(kind: FrameKind.publish, qos: qos, buf: payload);
     return await _send(frame, [topic]);
   }
@@ -135,9 +136,7 @@ class Bus {
           final payload =
               _utf8encoder.convert(targets?.join(String.fromCharCode(0)) ?? "");
           final header = _sendHeader(frameId, flags, payload.length);
-          _soket.write(Uint8Buffer()
-            ..addAll(header)
-            ..addAll(payload));
+          _soket.write(Uint8List.fromList([...header, ...payload]));
 
           return o;
 
@@ -153,15 +152,12 @@ class Bus {
           }
 
           final header = _sendHeader(frameId, flags, frameLen);
-          final bufs = Uint8Buffer()
-            ..addAll(header)
-            ..addAll(targetBuf)
-            ..add(0);
+          final bufs = [...header, ...targetBuf, 0];
           if (frame.header != null) {
             bufs.addAll(frame.header!);
           }
 
-          _soket.write(bufs);
+          _soket.write(Uint8List.fromList(bufs));
 
           if (frame.payload.isNotEmpty) {
             _soket.write(frame.payload);
@@ -177,11 +173,12 @@ class Bus {
     }
   }
 
-  Uint8Buffer _sendHeader(int frameId, int flags, int payloadLen) {
-    final header = Uint8Buffer();
-    header.addAll(Uint32List.fromList([frameId]).buffer.asUint8List());
-    header.add(flags);
-    header.addAll(Uint32List.fromList([payloadLen]).buffer.asUint8List());
+  Uint8List _sendHeader(int frameId, int flags, int payloadLen) {
+    final header = Uint8List.fromList([
+      ...Uint32List.fromList([frameId]).buffer.asUint8List(),
+      flags,
+      ...Uint32List.fromList([payloadLen]).buffer.asUint8List(),
+    ]);
 
     return header;
   }
@@ -240,9 +237,7 @@ class Bus {
         Uint32List.fromList([_name.length]).buffer.asUint8List().take(2);
     final name = _utf8encoder.convert(_name);
 
-    _soket.write(Uint8Buffer()
-      ..addAll(nameLen)
-      ..addAll(name));
+    _soket.write(Uint8List.fromList([...nameLen, ...name]));
 
     buf = await _soket.read(1);
 
@@ -285,8 +280,8 @@ class Bus {
     }
   }
 
-  void _askHandler(Uint8Buffer buf) {
-    final opIdBbuf = Uint8Buffer()..addAll(buf.getRange(1, 5));
+  void _askHandler(Uint8List buf) {
+    final opIdBbuf = Uint8List.fromList(buf.getRange(1, 5).toList());
     final opId = opIdBbuf.buffer.asUint32List().first;
     final res = _frames.remove(opId);
     if (res is OpResult) {
@@ -297,9 +292,9 @@ class Bus {
     }
   }
 
-  Future<void> _incomingMessageHandler(Uint8Buffer buf) async {
+  Future<void> _incomingMessageHandler(Uint8List buf) async {
     final frameKind = buf[0].toFrameKind();
-    final frameLenBuf = Uint8Buffer()..addAll(buf.getRange(1, 5));
+    final frameLenBuf = Uint8List.fromList(buf.getRange(1, 5).toList());
     final frameLen = frameLenBuf.buffer.asUint32List().first;
     final payload = await _soket.read(frameLen);
 

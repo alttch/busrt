@@ -8,23 +8,33 @@ class Rpc {
 
   FutureOr<void> Function(Frame f)? _onFrane;
   FutureOr<void> Function(RpcEvent e)? _onNotification;
-  FutureOr<Uint8Buffer?> Function(RpcEvent e) _onCall =
+  FutureOr<Uint8List?> Function(RpcEvent e) _onCall =
       (_) => throw RpcMethodNotFoundError("RPC engine not intialized");
 
   final bool _blockingNotifications;
   final bool _blockingFrames;
 
   Rpc(this._bus,
-      {bool blockingFrames = false, bool blockingNotifications = false})
+      {bool blockingFrames = false,
+      bool blockingNotifications = false,
+      FutureOr<void> Function(Frame f)? onFrane,
+      FutureOr<void> Function(RpcEvent e)? onNotification,
+      FutureOr<Uint8List?> Function(RpcEvent e)? onCall})
       : _blockingFrames = blockingFrames,
         _blockingNotifications = blockingNotifications {
+    _onFrane = onFrane;
+    _onNotification = onNotification;
     _bus.onFrame = _handleFrame;
+
+    if (onCall != null) {
+      _onCall = onCall;
+    }
   }
 
   bool isConnected() => _bus.isConnected();
 
   Future<OpResult> notify(String target,
-      {Uint8Buffer? payload, QoS qos = QoS.processed}) async {
+      {Uint8List? payload, QoS qos = QoS.processed}) async {
     final notification = Frame.rpcNotification(
       qos: qos,
       payload: payload,
@@ -33,21 +43,22 @@ class Rpc {
     return await _bus._send(notification, [target]);
   }
 
-  set onCall(FutureOr<Uint8Buffer?> Function(RpcEvent e) fn) => _onCall = fn;
+  set onCall(FutureOr<Uint8List?> Function(RpcEvent e) fn) => _onCall = fn;
 
-  set onNotification(FutureOr<void> Function(RpcEvent e)? fn) => _onNotification = fn;
+  set onNotification(FutureOr<void> Function(RpcEvent e)? fn) =>
+      _onNotification = fn;
 
   set onFrame(FutureOr<void> Function(Frame f)? fn) => _onFrane = fn;
 
   Future<OpResult> call0(String target, String method,
-      {Uint8Buffer? params, QoS qos = QoS.processed}) async {
+      {Uint8List? params, QoS qos = QoS.processed}) async {
     final request = Frame.rpcRequest(method: method, params: params, qos: qos);
 
     return await _bus._send(request, [target]);
   }
 
   Future<RpcOpResult> call(String target, String method,
-      {Uint8Buffer? params, QoS qos = QoS.processed}) async {
+      {Uint8List? params, QoS qos = QoS.processed}) async {
     await _callLock.acquire();
     final callId = _incrimentCalId();
     _callLock.release();
@@ -122,13 +133,13 @@ class Rpc {
     );
     final callId = callIdBuf.buffer.asUint32List().first;
 
-    final s = frame.payload.take(5).toList();
+    final s = frame.payload.skip(5).toList();
     int i = s.indexOf(0);
     if (i == -1) {
       throw DataError("Invalid BUS/RT frame");
     }
 
-    final method = Uint8Buffer()..addAll(s.getRange(0, i));
+    final method = Uint8List.fromList(s.getRange(0, i).toList());
     final e = RpcEvent(
       RpcEventKind.request,
       frame,
@@ -144,10 +155,9 @@ class Rpc {
 
     late final Frame replay;
     try {
-      final buffer = (await _onCall(e)) ?? Uint8Buffer(1);
-      final header = Uint8Buffer()
-        ..add(RpcEventKind.reply.value)
-        ..addAll(callIdBuf);
+      final buffer = (await _onCall(e)) ?? Uint8List(1);
+      final header =
+          Uint8List.fromList([RpcEventKind.reply.value, ...callIdBuf]);
       replay = Frame.rpcReplay(
         result: buffer,
         header: header,
@@ -155,12 +165,9 @@ class Rpc {
       );
     } catch (e) {
       final code = e is ErrorKind ? e.value : RpcInternalError().value;
-      final codeBuf = Uint8Buffer()
-        ..addAll(Int16List.fromList([code]).buffer.asUint8List());
-      final header = Uint8Buffer()
-        ..add(RpcEventKind.reply.value)
-        ..addAll(callIdBuf)
-        ..addAll(codeBuf);
+      final codeBuf = Int16List.fromList([code]).buffer.asUint8List();
+      final header = Uint8List.fromList(
+          [RpcEventKind.reply.value, ...callIdBuf, ...codeBuf]);
       replay = Frame.rpcReplay(
         header: header,
         qos: frame.qos,
@@ -200,12 +207,14 @@ class Rpc {
   }
 
   int _incrimentCalId() {
-    if (_callId >= 0xffffffff) {
+    final res = _callId + 1;
+
+    if (res >= 0xffffffff) {
       _callId = 0;
     } else {
-      _callId += 1;
+      _callId = res;
     }
 
-    return _callId;
+    return res;
   }
 }
