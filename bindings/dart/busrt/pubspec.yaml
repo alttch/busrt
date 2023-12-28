@@ -1,7 +1,7 @@
 name: busrt
 description: A sample command-line application.
 version: 0.1.0
-# repository: https://github.com/my_org/my_repo
+repository: https://github.com/AndreiLosev/busrt/tree/impl-dart-client/bindings/dart/busrt
 
 environment:
   sdk: ^3.2.2
