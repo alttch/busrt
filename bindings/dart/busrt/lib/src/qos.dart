@@ -1,4 +1,4 @@
-import 'package:busrt/src/error_kind.dart';
+import 'package:busrt/src/bus_error.dart';
 
 enum QoS {
   no(0),

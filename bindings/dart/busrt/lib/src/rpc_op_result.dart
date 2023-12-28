@@ -3,14 +3,14 @@ import 'package:mutex/mutex.dart';
 
 class RpcOpResult {
   final _completed = Mutex();
-  ErrorKind? _err;
+  BusError? _err;
   Frame? _frame;
 
   Future<void> loc() async => await _completed.acquire();
 
   void unloc() => _completed.release();
 
-  set err(ErrorKind? e) => _err = e;
+  set err(BusError? e) => _err = e;
 
   set frame(Frame? f) => _frame = f;
 
@@ -18,7 +18,7 @@ class RpcOpResult {
     await _completed.acquire();
     _completed.release();
 
-    if (_err is ErrorKind) {
+    if (_err is BusError) {
       throw _err!;
     }
     _frame?.addPayloadPos(5);

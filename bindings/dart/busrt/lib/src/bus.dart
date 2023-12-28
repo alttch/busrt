@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:busrt/src/consts.dart';
-import 'package:busrt/src/error_kind.dart';
+import 'package:busrt/src/bus_error.dart';
 import 'package:busrt/src/frame.dart';
 import 'package:busrt/src/frame_kind.dart';
 import 'package:busrt/src/future_soket.dart';
@@ -14,7 +14,6 @@ import 'package:busrt/src/rpc_event.dart';
 import 'package:busrt/src/rpc_event_kind.dart';
 import 'package:busrt/src/rpc_op_result.dart';
 import 'package:mutex/mutex.dart';
-import 'package:typed_data/typed_data.dart';
 
 part 'rpc.dart';
 

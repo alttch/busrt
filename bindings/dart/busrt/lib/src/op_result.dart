@@ -1,11 +1,11 @@
-import 'package:busrt/src/error_kind.dart';
+import 'package:busrt/src/bus_error.dart';
 import 'package:busrt/src/qos.dart';
 import 'package:mutex/mutex.dart';
 
 class OpResult {
   final QoS _qos;
   final _loc = Mutex();
-  late final ErrorKind? _result;
+  late final BusError? _result;
 
   OpResult(this._qos);
 

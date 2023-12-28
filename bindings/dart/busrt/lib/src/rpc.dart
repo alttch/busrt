@@ -31,6 +31,15 @@ class Rpc {
     }
   }
 
+  set onCall(FutureOr<Uint8List?> Function(RpcEvent e) fn) => _onCall = fn;
+
+  set onNotification(FutureOr<void> Function(RpcEvent e)? fn) =>
+      _onNotification = fn;
+
+  set onFrame(FutureOr<void> Function(Frame f)? fn) => _onFrane = fn;
+
+  Bus get bus => _bus; 
+
   bool isConnected() => _bus.isConnected();
 
   Future<OpResult> notify(String target,
@@ -42,13 +51,6 @@ class Rpc {
 
     return await _bus._send(notification, [target]);
   }
-
-  set onCall(FutureOr<Uint8List?> Function(RpcEvent e) fn) => _onCall = fn;
-
-  set onNotification(FutureOr<void> Function(RpcEvent e)? fn) =>
-      _onNotification = fn;
-
-  set onFrame(FutureOr<void> Function(Frame f)? fn) => _onFrane = fn;
 
   Future<OpResult> call0(String target, String method,
       {Uint8List? params, QoS qos = QoS.processed}) async {
@@ -74,7 +76,7 @@ class Rpc {
       final opc = await _bus._send(request, [target]);
       try {
         await opc.waitCompleted();
-      } on ErrorKind catch (e) {
+      } on BusError catch (e) {
         _calls.remove(callId);
         rpcResult.err = e;
         rpcResult.unloc();
@@ -164,7 +166,7 @@ class Rpc {
         qos: frame.qos,
       );
     } catch (e) {
-      final code = e is ErrorKind ? e.value : RpcInternalError().value;
+      final code = e is BusError ? e.value : RpcInternalError().value;
       final codeBuf = Int16List.fromList([code]).buffer.asUint8List();
       final header = Uint8List.fromList(
           [RpcEventKind.reply.value, ...callIdBuf, ...codeBuf]);

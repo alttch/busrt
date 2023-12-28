@@ -1,13 +1,13 @@
 import 'package:busrt/src/consts.dart';
 
-sealed class ErrorKind implements Exception {
+sealed class BusError implements Exception {
   final String? message;
 
-  ErrorKind([this.message]);
+  BusError([this.message]);
 
   int get value;
 
-  static ErrorKind fromInt(int code, [String? message]) => switch (code) {
+  static BusError fromInt(int code, [String? message]) => switch (code) {
         errClientNotRegistered => NotRegisteredError(message),
         errNotSupported => NotSupportedError(message),
         errIo => IoError(message),
@@ -36,7 +36,7 @@ sealed class ErrorKind implements Exception {
   }
 }
 
-class NotRegisteredError extends ErrorKind {
+class NotRegisteredError extends BusError {
   NotRegisteredError([super.message]);
 
   @override
@@ -46,7 +46,7 @@ class NotRegisteredError extends ErrorKind {
   String toString() => "Client not registered${super.toString()}";
 }
 
-class NotSupportedError extends ErrorKind {
+class NotSupportedError extends BusError {
   NotSupportedError([super.message]);
 
   @override
@@ -56,7 +56,7 @@ class NotSupportedError extends ErrorKind {
   String toString() => "Feature not supported${super.toString()}";
 }
 
-class IoError extends ErrorKind {
+class IoError extends BusError {
   IoError([super.message]);
 
   @override
@@ -66,7 +66,7 @@ class IoError extends ErrorKind {
   String toString() => "I/O Error${super.toString()}";
 }
 
-class TimeoutError extends ErrorKind {
+class TimeoutError extends BusError {
   TimeoutError([super.message]);
 
   @override
@@ -76,7 +76,7 @@ class TimeoutError extends ErrorKind {
   String toString() => "Timeout${super.toString()}";
 }
 
-class DataError extends ErrorKind {
+class DataError extends BusError {
   DataError([super.message]);
 
   @override
@@ -86,7 +86,7 @@ class DataError extends ErrorKind {
   String toString() => "Data Error${super.toString()}";
 }
 
-class BusyError extends ErrorKind {
+class BusyError extends BusError {
   BusyError([super.message]);
 
   @override
@@ -96,7 +96,7 @@ class BusyError extends ErrorKind {
   String toString() => "Busy${super.toString()}";
 }
 
-class NotDeliveredError extends ErrorKind {
+class NotDeliveredError extends BusError {
   NotDeliveredError([super.message]);
 
   @override
@@ -106,7 +106,7 @@ class NotDeliveredError extends ErrorKind {
   String toString() => "Frame not delivered${super.toString()}";
 }
 
-class AccessError extends ErrorKind {
+class AccessError extends BusError {
   AccessError([super.message]);
 
   @override
@@ -116,7 +116,7 @@ class AccessError extends ErrorKind {
   String toString() => "Access denied${super.toString()}";
 }
 
-class OtherError extends ErrorKind {
+class OtherError extends BusError {
   OtherError([super.message]);
 
   @override
@@ -126,7 +126,7 @@ class OtherError extends ErrorKind {
   String toString() => "Othe Error${super.toString()}";
 }
 
-class EofError extends ErrorKind {
+class EofError extends BusError {
   EofError([super.message]);
 
   @override
@@ -136,7 +136,7 @@ class EofError extends ErrorKind {
   String toString() => "Eof${super.toString()}";
 }
 
-class RpcParseError extends ErrorKind {
+class RpcParseError extends BusError {
   RpcParseError([super.message]);
 
   @override
@@ -146,7 +146,7 @@ class RpcParseError extends ErrorKind {
   String toString() => "errRpcParse${super.toString()}";
 }
 
-class RpcInvalidRequestError extends ErrorKind {
+class RpcInvalidRequestError extends BusError {
   RpcInvalidRequestError([super.message]);
 
   @override
@@ -156,7 +156,7 @@ class RpcInvalidRequestError extends ErrorKind {
   String toString() => "errRpcInvalidRequest${super.toString()}";
 }
 
-class RpcMethodNotFoundError extends ErrorKind {
+class RpcMethodNotFoundError extends BusError {
   RpcMethodNotFoundError([super.message]);
 
   @override
@@ -166,7 +166,7 @@ class RpcMethodNotFoundError extends ErrorKind {
   String toString() => "errRpcMethodNotFound${super.toString()}";
 }
 
-class RpcInvalidMethodParamsError extends ErrorKind {
+class RpcInvalidMethodParamsError extends BusError {
   RpcInvalidMethodParamsError([super.message]);
 
   @override
@@ -176,7 +176,7 @@ class RpcInvalidMethodParamsError extends ErrorKind {
   String toString() => "errRpcInvalidMethodParams${super.toString()}";
 }
 
-class RpcInternalError extends ErrorKind {
+class RpcInternalError extends BusError {
   RpcInternalError([super.message]);
 
   @override
@@ -186,7 +186,7 @@ class RpcInternalError extends ErrorKind {
   String toString() => "errRpcInternal${super.toString()}";
 }
 
-class RpcCodeNotFoundError extends ErrorKind {
+class RpcCodeNotFoundError extends BusError {
   RpcCodeNotFoundError([super.message]);
 
   @override
@@ -197,11 +197,11 @@ class RpcCodeNotFoundError extends ErrorKind {
 }
 
 extension IntoBusRtResult on int {
-  ErrorKind? toErrKind([mesage]) {
+  BusError? toErrKind([mesage]) {
     if (this == responseOk) {
       return null;
     }
 
-    return ErrorKind.fromInt(this, mesage);
+    return BusError.fromInt(this, mesage);
   }
 }
