@@ -21,6 +21,7 @@ class RpcOpResult {
     if (_err is BusError) {
       throw _err!;
     }
+
     _frame?.addPayloadPos(5);
     return _frame;
   }
