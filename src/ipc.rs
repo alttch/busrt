@@ -1,3 +1,4 @@
+use crate::borrow::Cow;
 use crate::comm::{Flush, TtlBufWriter};
 use crate::Error;
 use crate::EventChannel;
