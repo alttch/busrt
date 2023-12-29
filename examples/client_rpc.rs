@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new("/tmp/busrt.sock", name);
     let client = Client::connect(&config).await?;
     // create RPC with no handlers
-    // let rpc = RpcClient::new0(client);
+    let rpc = RpcClient::new0(client);
     // call the method with no confirm
     rpc.call0(target, "test", empty_payload!(), QoS::Processed)
         .await?;
