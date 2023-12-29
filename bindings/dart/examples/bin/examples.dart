@@ -25,15 +25,14 @@ Future<Map<String, int>> runWorker(String myName, String parnterName) async {
     final rpc = Rpc(bus, onCall: onCall, onNotification: ononNotification);
     await rpc.bus.connect("/tmp/busrt.sock");
     final method = parnterName.replaceAll('worker.', '');
-    final count = method == 'add' ? 250 : 249;
+    final count = method == 'add' ? 501 : 499;
     await Future.delayed(Duration(milliseconds: 10));
     for (var i in List.generate(count, (i) => i)) {
-      final res = await rpc.call0(parnterName, method, params: serialize({'value': i}));
+      final res = await rpc.call(parnterName, method, params: serialize({'value': i}));
       await res.waitCompleted();
-      await Future.delayed(Duration(milliseconds: 1));
     }
 
-    await Future.delayed(Duration(milliseconds: 100));
+    await Future.delayed(Duration(milliseconds: 10));
 
     final res = await rpc.call(parnterName, 'get');
     fromRpcCall = deserialize((await res.waitCompleted())!.payload)['value'];

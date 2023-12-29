@@ -169,7 +169,7 @@ class Rpc {
       final code = e is BusError ? e.value : RpcInternalError().value;
       final codeBuf = Int16List.fromList([code]).buffer.asUint8List();
       final header = Uint8List.fromList(
-          [RpcEventKind.reply.value, ...callIdBuf, ...codeBuf]);
+          [RpcEventKind.error.value, ...callIdBuf, ...codeBuf]);
       replay = Frame.rpcReplay(
         header: header,
         qos: frame.qos,

@@ -17,7 +17,7 @@ class RpcOpResult {
   Future<Frame?> waitCompleted() async {
     await _completed.acquire();
     _completed.release();
-
+    
     if (_err is BusError) {
       throw _err!;
     }
