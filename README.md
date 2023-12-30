@@ -33,7 +33,7 @@ In addition to Rust, BUS/RT has also bindings for the following languages:
 * Python (sync): <https://pypi.org/project/busrt/>
 * Python (async): <https://pypi.org/project/busrt-async/>
 * JavaScript (Node.js): <https://www.npmjs.com/package/busrt>
-* dart <https://github.com/AndreiLosev/busrt_client>
+* Dart <https://github.com/AndreiLosev/busrt_client>
 
 Rust crate: <https://crates.io/crates/busrt>
 
