@@ -1514,8 +1514,9 @@ impl Broker {
         macro_rules! format_result {
             ($res: expr) => {
                 if let Err(ref mut e) = $res {
-                    let client_msg = format!(" [{}]", client_name);
+                    let client_msg = format!("[{}]", client_name);
                     if let Some(ref mut msg) = e.message {
+                        msg.push(' ');
                         msg.push_str(&client_msg);
                     } else {
                         e.message.replace(client_msg);
