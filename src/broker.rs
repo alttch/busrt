@@ -1511,17 +1511,32 @@ impl Broker {
                 debug!("bus/rt client disconnected: {}", client_name);
             };
         }
+        macro_rules! format_result {
+            ($res: expr) => {
+                if let Err(ref mut e) = $res {
+                    let client_msg = format!(" [{}]", client_name);
+                    if let Some(ref mut msg) = e.message {
+                        msg.push_str(&client_msg);
+                    } else {
+                        e.message.replace(client_msg);
+                    }
+                }
+            };
+        }
         tokio::select! {
-            result = reader_fut => {
+            mut result = reader_fut => {
                 finish_peer!();
+                format_result!(result);
                 result
             }
-            result = writer_fut => {
+            mut result = writer_fut => {
                 finish_peer!();
+                format_result!(result);
                 result
             }
-            result = pinger_fut => {
+            mut result = pinger_fut => {
                 finish_peer!();
+                format_result!(result);
                 result
             }
             _ = disconnect_listener => {
