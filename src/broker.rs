@@ -1540,7 +1540,7 @@ impl Broker {
                 format_result!(result);
                 result
             }
-            _ = disconnect_listener => {
+            () = disconnect_listener => {
                 debug!("disconnected by the broker: {}", client_name);
                 finish_peer!();
                 Ok(())
