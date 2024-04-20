@@ -15,6 +15,7 @@ use crate::{OP_ACK, RESPONSE_OK};
 use async_trait::async_trait;
 use ipnetwork::IpNetwork;
 use log::{debug, error, trace, warn};
+use parking_lot::Mutex as SyncMutex;
 #[cfg(feature = "rpc")]
 use serde::{Deserialize, Serialize};
 use std::collections::{hash_map, HashMap, HashSet};
@@ -24,7 +25,6 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::sync::atomic;
 use std::sync::Arc;
-use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
 use submap::{AclMap, BroadcastMap, SubMap};
@@ -108,7 +108,7 @@ macro_rules! send {
         $db.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
         trace!("bus/rt message from {} to {}", $client, $target);
         let client = {
-            $db.clients.read().unwrap().get($target).map(|c| {
+            $db.clients.lock().get($target).map(|c| {
                 c.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
                 c.w_bytes.fetch_add($len, atomic::Ordering::Relaxed);
                 $db.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
@@ -142,7 +142,7 @@ macro_rules! send_broadcast {
         $db.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
         trace!("bus/rt broadcast message from {} to {}", $client, $target);
         #[allow(clippy::mutable_key_type)]
-        let subs = { $db.broadcasts.read().unwrap().get_clients_by_mask($target) };
+        let subs = { $db.broadcasts.lock().get_clients_by_mask($target) };
         if !subs.is_empty() {
             let frame = Arc::new(FrameData {
                 kind: FrameKind::Broadcast,
@@ -175,7 +175,11 @@ macro_rules! publish {
         $db.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
         trace!("bus/rt topic publish from {} to {}", $client, $topic);
         #[allow(clippy::mutable_key_type)]
-        let subs = { $db.subscriptions.read().unwrap().get_subscribers($topic) };
+        let mut subs = { $db.subscriptions.lock().get_subscribers($topic) };
+        subs.retain(|sub| {
+            !sub.has_exclusions.load(atomic::Ordering::Acquire)
+                || !sub.exclusions.lock().matches($topic)
+        });
         if !subs.is_empty() {
             let frame = Arc::new(FrameData {
                 kind: FrameKind::Publish,
@@ -213,13 +217,7 @@ impl AsyncClient for Client {
     ///
     /// Will panic if the mutex is poisoned
     async fn subscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
-        if self
-            .db
-            .subscriptions
-            .write()
-            .unwrap()
-            .subscribe(topic, &self.client)
-        {
+        if self.db.subscriptions.lock().subscribe(topic, &self.client) {
             make_confirm_channel!(qos)
         } else {
             Err(Error::not_registered())
@@ -229,7 +227,7 @@ impl AsyncClient for Client {
     ///
     /// Will panic if the mutex is poisoned
     async fn subscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
-        let mut db = self.db.subscriptions.write().unwrap();
+        let mut db = self.db.subscriptions.lock();
         for topic in topics {
             if !db.subscribe(topic, &self.client) {
                 return Err(Error::not_registered());
@@ -244,8 +242,7 @@ impl AsyncClient for Client {
         if self
             .db
             .subscriptions
-            .write()
-            .unwrap()
+            .lock()
             .unsubscribe(topic, &self.client)
         {
             make_confirm_channel!(qos)
@@ -257,11 +254,55 @@ impl AsyncClient for Client {
     ///
     /// Will panic if the mutex is poisoned
     async fn unsubscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
-        let mut db = self.db.subscriptions.write().unwrap();
+        let mut db = self.db.subscriptions.lock();
         for topic in topics {
             if !db.unsubscribe(topic, &self.client) {
                 return Err(Error::not_registered());
             }
+        }
+        make_confirm_channel!(qos)
+    }
+    async fn exclude(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
+        self.client
+            .has_exclusions
+            .store(true, atomic::Ordering::Release);
+        self.client.exclusions.lock().insert(topic);
+        make_confirm_channel!(qos)
+    }
+    /// unexclude a topic (include back but not subscribe)
+    async fn unexclude(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
+        let mut exclusions = self.client.exclusions.lock();
+        exclusions.remove(topic);
+        if exclusions.is_empty() {
+            self.client
+                .has_exclusions
+                .store(false, atomic::Ordering::Release);
+        }
+        make_confirm_channel!(qos)
+    }
+    /// exclude multiple topics
+    async fn exclude_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
+        let mut exclusions = self.client.exclusions.lock();
+        if !topics.is_empty() {
+            self.client
+                .has_exclusions
+                .store(true, atomic::Ordering::Release);
+        }
+        for topic in topics {
+            exclusions.insert(topic);
+        }
+        make_confirm_channel!(qos)
+    }
+    /// unexclude multiple topics (include back but not subscribe)
+    async fn unexclude_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
+        let mut exclusions = self.client.exclusions.lock();
+        for topic in topics {
+            exclusions.remove(topic);
+        }
+        if exclusions.is_empty() {
+            self.client
+                .has_exclusions
+                .store(false, atomic::Ordering::Release);
         }
         make_confirm_channel!(qos)
     }
@@ -429,7 +470,9 @@ struct BusRtClient {
     w_frames: atomic::AtomicU64,
     w_bytes: atomic::AtomicU64,
     primary: bool,
-    secondaries: parking_lot::Mutex<HashSet<String>>,
+    secondaries: SyncMutex<HashSet<String>>,
+    has_exclusions: atomic::AtomicBool,
+    exclusions: SyncMutex<AclMap>,
 }
 
 impl fmt::Display for BusRtClient {
@@ -468,6 +511,10 @@ impl BusRtClient {
                 w_bytes: atomic::AtomicU64::new(0),
                 primary,
                 secondaries: <_>::default(),
+                has_exclusions: atomic::AtomicBool::new(false),
+                exclusions: SyncMutex::new(
+                    AclMap::new().separator('/').match_any("+").wildcard("#"),
+                ),
             },
             rx,
             disconnect_listener,
@@ -547,9 +594,9 @@ impl<'a> BrokerEvent<'a> {
 }
 
 struct BrokerDb {
-    clients: RwLock<HashMap<String, BrokerClient>>,
-    broadcasts: RwLock<BroadcastMap<BrokerClient>>,
-    subscriptions: RwLock<SubMap<BrokerClient>>,
+    clients: SyncMutex<HashMap<String, BrokerClient>>,
+    broadcasts: SyncMutex<BroadcastMap<BrokerClient>>,
+    subscriptions: SyncMutex<SubMap<BrokerClient>>,
     #[cfg(feature = "rpc")]
     rpc_client: Arc<Mutex<Option<RpcClient>>>,
     r_frames: atomic::AtomicU64,
@@ -564,13 +611,15 @@ impl Default for BrokerDb {
     fn default() -> Self {
         Self {
             clients: <_>::default(),
-            broadcasts: RwLock::new(
+            broadcasts: SyncMutex::new(
                 BroadcastMap::new()
                     .separator('.')
                     .match_any("?")
                     .wildcard("*"),
             ),
-            subscriptions: RwLock::new(SubMap::new().separator('/').match_any("+").wildcard("#")),
+            subscriptions: SyncMutex::new(
+                SubMap::new().separator('/').match_any("+").wildcard("#"),
+            ),
             #[cfg(feature = "rpc")]
             rpc_client: <_>::default(),
             r_frames: atomic::AtomicU64::new(0),
@@ -625,7 +674,7 @@ impl BrokerDb {
         match self.insert_client(client.clone()) {
             Ok(()) => {}
             Err(e) if e.kind() == ErrorKind::Busy && allow_force => {
-                let prev_c = self.clients.write().unwrap().remove(&name);
+                let prev_c = self.clients.lock().remove(&name);
                 if let Some(prev) = prev_c {
                     warn!("disconnecting previous instance of {}", name);
                     self.drop_client(&prev);
@@ -644,7 +693,7 @@ impl BrokerDb {
         Ok(())
     }
     fn insert_client(&self, client: Arc<BusRtClient>) -> Result<(), Error> {
-        let mut clients = self.clients.write().unwrap();
+        let mut clients = self.clients.lock();
         let primary_client = if client.primary {
             None
         } else {
@@ -660,11 +709,11 @@ impl BrokerDb {
                 pc.secondaries.lock().insert(client.name.clone());
             }
             {
-                let mut bdb = self.broadcasts.write().unwrap();
+                let mut bdb = self.broadcasts.lock();
                 bdb.register_client(&client.name, &client);
             }
             {
-                let mut sdb = self.subscriptions.write().unwrap();
+                let mut sdb = self.subscriptions.lock();
                 sdb.register_client(&client);
                 sdb.subscribe(BROKER_WARN_TOPIC, &client);
             }
@@ -679,7 +728,7 @@ impl BrokerDb {
         Ok(())
     }
     fn trigger_disconnect(&self, name: &str) -> Result<(), Error> {
-        if let Some(client) = self.clients.read().unwrap().get(name) {
+        if let Some(client) = self.clients.lock().get(name) {
             if client.kind == BusRtClientKind::Internal {
                 Err(Error::not_supported("the client is internal"))
             } else {
@@ -706,19 +755,15 @@ impl BrokerDb {
     fn drop_client(&self, client: &Arc<BusRtClient>) {
         if client.registered.load(atomic::Ordering::Relaxed) {
             client.registered.store(false, atomic::Ordering::Relaxed);
-            self.subscriptions
-                .write()
-                .unwrap()
-                .unregister_client(client);
+            self.subscriptions.lock().unregister_client(client);
             self.broadcasts
-                .write()
-                .unwrap()
+                .lock()
                 .unregister_client(&client.name, client);
-            self.clients.write().unwrap().remove(&client.name);
+            self.clients.lock().remove(&client.name);
             if client.primary {
                 let mut secondaries = client.secondaries.lock();
                 for secondary in &*secondaries {
-                    let sec = self.clients.read().unwrap().get(secondary).cloned();
+                    let sec = self.clients.lock().get(secondary).cloned();
                     if let Some(sec) = sec {
                         if sec.kind != BusRtClientKind::Internal {
                             sec.disconnect_trig.trigger();
@@ -727,14 +772,14 @@ impl BrokerDb {
                     }
                 }
                 secondaries.clear();
-            } else if let Some(primary) = self.clients.read().unwrap().get(&client.primary_name) {
+            } else if let Some(primary) = self.clients.lock().get(&client.primary_name) {
                 primary.secondaries.lock().remove(&client.name);
             }
         }
     }
 }
 
-pub type AaaMap = Arc<parking_lot::Mutex<HashMap<String, ClientAaa>>>;
+pub type AaaMap = Arc<SyncMutex<HashMap<String, ClientAaa>>>;
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
@@ -998,7 +1043,7 @@ impl BrokerRpcHandlers {
         } else {
             None
         };
-        let db = self.db.clients.read().unwrap();
+        let db = self.db.clients.lock();
         let mut clients: Vec<ClientInfo> = db
             .values()
             .filter(|c| {
@@ -1650,10 +1695,62 @@ impl Broker {
                         }
                     }
                     {
-                        let mut sdb = db.subscriptions.write().unwrap();
+                        let mut sdb = db.subscriptions.lock();
                         for t in topics {
                             sdb.subscribe(t, &client);
                             trace!("bus/rt client {} subscribed to topic {}", client, t);
+                        }
+                    }
+                    if qos.needs_ack() {
+                        send_ack!(RESPONSE_OK, qos.is_realtime());
+                    }
+                }
+                FrameOp::ExcludeTopic => {
+                    client.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                    client
+                        .r_bytes
+                        .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
+                    db.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                    db.r_bytes
+                        .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
+                    let sp = buf.split(|c| *c == 0);
+                    {
+                        let mut exclusions = client.exclusions.lock();
+                        let mut excluded = false;
+                        for t in sp {
+                            let topic = std::str::from_utf8(t)?;
+                            exclusions.insert(topic);
+                            trace!("bus/rt client {} excluded a topic {}", client, topic);
+                            excluded = true;
+                        }
+                        if excluded {
+                            client.has_exclusions.store(true, atomic::Ordering::Release);
+                        }
+                    }
+                    if qos.needs_ack() {
+                        send_ack!(RESPONSE_OK, qos.is_realtime());
+                    }
+                }
+                FrameOp::UnexcludeTopic => {
+                    client.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                    client
+                        .r_bytes
+                        .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
+                    db.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                    db.r_bytes
+                        .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
+                    let sp = buf.split(|c| *c == 0);
+                    {
+                        let mut exclusions = client.exclusions.lock();
+                        for t in sp {
+                            let topic = std::str::from_utf8(t)?;
+                            exclusions.remove(topic);
+                            trace!("bus/rt client {} unexcluded a topic {}", client, topic);
+                        }
+                        if exclusions.is_empty() {
+                            client
+                                .has_exclusions
+                                .store(false, atomic::Ordering::Release);
                         }
                     }
                     if qos.needs_ack() {
@@ -1670,7 +1767,7 @@ impl Broker {
                         .fetch_add(u64::from(len), atomic::Ordering::Relaxed);
                     let sp = buf.split(|c| *c == 0);
                     {
-                        let mut sdb = db.subscriptions.write().unwrap();
+                        let mut sdb = db.subscriptions.lock();
                         for t in sp {
                             let topic = std::str::from_utf8(t)?;
                             sdb.unsubscribe(topic, &client);

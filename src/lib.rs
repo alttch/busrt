@@ -11,6 +11,8 @@ pub const OP_NOP: u8 = 0x00;
 pub const OP_PUBLISH: u8 = 0x01;
 pub const OP_SUBSCRIBE: u8 = 0x02;
 pub const OP_UNSUBSCRIBE: u8 = 0x03;
+pub const OP_EXCLUDE: u8 = 0x04;
+pub const OP_UNEXCLUDE: u8 = 0x05;
 pub const OP_MESSAGE: u8 = 0x12;
 pub const OP_BROADCAST: u8 = 0x13;
 pub const OP_ACK: u8 = 0xFE;
@@ -301,6 +303,10 @@ pub enum FrameOp {
     PublishTopic = OP_PUBLISH,
     SubscribeTopic = OP_SUBSCRIBE,
     UnsubscribeTopic = OP_UNSUBSCRIBE,
+    ExcludeTopic = OP_EXCLUDE,
+    // not include but unexclude as it's clearly an opposite operation to exclude
+    // while include may be confused with subscribe
+    UnexcludeTopic = OP_UNEXCLUDE,
 }
 
 impl TryFrom<u8> for FrameOp {
@@ -313,6 +319,8 @@ impl TryFrom<u8> for FrameOp {
             OP_PUBLISH => Ok(FrameOp::PublishTopic),
             OP_SUBSCRIBE => Ok(FrameOp::SubscribeTopic),
             OP_UNSUBSCRIBE => Ok(FrameOp::UnsubscribeTopic),
+            OP_EXCLUDE => Ok(FrameOp::ExcludeTopic),
+            OP_UNEXCLUDE => Ok(FrameOp::UnexcludeTopic),
             _ => Err(Error::data(format!("Invalid frame type: {}", tp))),
         }
     }

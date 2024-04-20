@@ -38,6 +38,16 @@ pub trait AsyncClient: Send + Sync {
     async fn unsubscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error>;
     async fn subscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error>;
     async fn unsubscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error>;
+    /// exclude a topic. it is highly recommended to exclude topics first, then call subscribe
+    /// operations to avoid receiving unwanted messages. excluding topics is also an additional
+    /// heavy operation so use it only when there is no other way.
+    async fn exclude(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error>;
+    /// unexclude a topic (include back but not subscribe)
+    async fn unexclude(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error>;
+    /// exclude multiple topics
+    async fn exclude_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error>;
+    /// unexclude multiple topics (include back but not subscribe)
+    async fn unexclude_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error>;
     async fn ping(&mut self) -> Result<(), Error>;
     fn is_connected(&self) -> bool;
     fn get_connected_beacon(&self) -> Option<Arc<atomic::AtomicBool>>;

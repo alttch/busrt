@@ -57,6 +57,8 @@ enum BrokerCommand {
 struct ListenCommand {
     #[clap(short = 't', long = "topics", help = "Subscribe to topics")]
     topics: Vec<String>,
+    #[clap(long = "exclude", help = "Exclude topics")]
+    exclude_topics: Vec<String>,
 }
 
 #[derive(Parser, Clone)]
@@ -253,9 +255,26 @@ macro_rules! ok {
 async fn subscribe_topics(client: &mut Client, topics: &[String]) -> Result<(), Error> {
     topics
         .iter()
-        .for_each(|t| info!("subscribing to the topic {}", t.yellow()));
+        .for_each(|t| info!("subscribing to a topic {}", t.yellow()));
     client
         .subscribe_bulk(
+            &topics.iter().map(String::as_str).collect::<Vec<&str>>(),
+            QoS::Processed,
+        )
+        .await
+        .unwrap()
+        .unwrap()
+        .await
+        .unwrap()
+}
+
+#[allow(clippy::needless_for_each)]
+async fn exclude_topics(client: &mut Client, topics: &[String]) -> Result<(), Error> {
+    topics
+        .iter()
+        .for_each(|t| info!("excluding a topic {}", t.yellow()));
+    client
+        .exclude_bulk(
             &topics.iter().map(String::as_str).collect::<Vec<&str>>(),
             QoS::Processed,
         )
@@ -660,6 +679,9 @@ async fn main() {
         }
         Command::Listen(ref cmd) => {
             let mut client = create_client(&opts, &client_name).await;
+            exclude_topics(&mut client, &cmd.exclude_topics)
+                .await
+                .unwrap();
             subscribe_topics(&mut client, &cmd.topics).await.unwrap();
             sep();
             let rx = client.take_event_channel().unwrap();

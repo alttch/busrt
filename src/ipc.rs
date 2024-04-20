@@ -11,10 +11,11 @@ use crate::PROTOCOL_VERSION;
 use crate::RESPONSE_OK;
 use crate::SECONDARY_SEP;
 use crate::{Frame, FrameData, FrameKind, FrameOp};
+use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::marker::Unpin;
 use std::sync::atomic;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 #[cfg(not(target_os = "windows"))]
@@ -136,7 +137,7 @@ macro_rules! send_frame_and_confirm {
         let rx = if $qos.needs_ack() {
             let (tx, rx) = oneshot::channel();
             {
-                $self.responses.lock().unwrap().insert($self.frame_id, tx);
+                $self.responses.lock().insert($self.frame_id, tx);
             }
             Some(rx)
         } else {
@@ -380,6 +381,32 @@ impl AsyncClient for Client {
         }
         send_frame!(self, &payload, FrameOp::UnsubscribeTopic, qos)
     }
+    async fn exclude(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
+        send_frame!(self, topic.as_bytes(), FrameOp::ExcludeTopic, qos)
+    }
+    async fn unexclude(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
+        send_frame!(self, topic.as_bytes(), FrameOp::UnexcludeTopic, qos)
+    }
+    async fn exclude_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
+        let mut payload = Vec::new();
+        for topic in topics {
+            if !payload.is_empty() {
+                payload.push(0x00);
+            }
+            payload.extend(topic.as_bytes());
+        }
+        send_frame!(self, &payload, FrameOp::ExcludeTopic, qos)
+    }
+    async fn unexclude_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
+        let mut payload = Vec::new();
+        for topic in topics {
+            if !payload.is_empty() {
+                payload.push(0x00);
+            }
+            payload.extend(topic.as_bytes());
+        }
+        send_frame!(self, &payload, FrameOp::UnexcludeTopic, qos)
+    }
     #[inline]
     async fn ping(&mut self) -> Result<(), Error> {
         send_data_or_mark_disconnected!(self, PING_FRAME, Flush::Instant);
@@ -423,7 +450,7 @@ where
             FrameKind::Nop => {}
             FrameKind::Acknowledge => {
                 let ack_id = u32::from_le_bytes(buf[1..5].try_into().unwrap());
-                let tx_channel = { responses.lock().unwrap().remove(&ack_id) };
+                let tx_channel = { responses.lock().remove(&ack_id) };
                 if let Some(tx) = tx_channel {
                     let _r = tx.send(buf[5].to_busrt_result());
                 } else {

@@ -76,9 +76,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::new("/tmp/busrt.sock", name);
     let mut client = Client::connect(&config).await?;
     // subscribe the cclient to all topics to print publish frames when received
-    let opc = client.subscribe("#", QoS::Processed).await?.expect("no op");
+    let op_confirm = client.subscribe("#", QoS::Processed).await?.expect("no op");
     // receive operation confirmation
-    opc.await??;
+    op_confirm.await??;
     // create handlers object
     let handlers = MyHandlers {
         counter: atomic::AtomicU64::default(),

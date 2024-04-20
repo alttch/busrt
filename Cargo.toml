@@ -25,7 +25,7 @@ syslog = { version = "5.0.0", optional = true }
 chrono = { version = "0.4.19", optional = true }
 colored = { version = "2", optional = true }
 clap = { version = "3.0.7", features = ["derive"], optional = true }
-submap = { version = "0.2.3", optional = true, features = ["native-digest"] }
+submap = { version = "0.2.8", optional = true, features = ["native-digest"] }
 lazy_static = { version = "1.4.0", optional = true }
 jemallocator = { version = "0.5.0", optional = true }
 fork = { version = "0.1.18", optional = true }
@@ -65,6 +65,7 @@ full = ["rpc", "ipc", "broker"]
 cursors = ["rpc", "uuid"]
 std-alloc = []
 tracing = ["tokio/tracing", "console-subscriber"]
+#default = ["full"]
 
 [lib]
 name = "busrt"
