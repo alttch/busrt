@@ -37,6 +37,12 @@ In addition to Rust, BUS/RT has also bindings for the following languages:
 
 Rust crate: <https://crates.io/crates/busrt>
 
+## Real-time safety
+
+Use `rt` feature to use
+[`parking_lot_rt`](https://crates.io/crates/parking_lot_rt) - a `parking_lot`
+fork without spin-locks, which is real-time safe.
+
 ## Technical documentation
 
 The full documentation is available at: <https://info.bma.ai/en/actual/busrt/>

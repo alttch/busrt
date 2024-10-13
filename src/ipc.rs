@@ -11,7 +11,10 @@ use crate::PROTOCOL_VERSION;
 use crate::RESPONSE_OK;
 use crate::SECONDARY_SEP;
 use crate::{Frame, FrameData, FrameKind, FrameOp};
+#[cfg(not(feature = "rt"))]
 use parking_lot::Mutex;
+#[cfg(feature = "rt")]
+use parking_lot_rt::Mutex;
 use std::collections::BTreeMap;
 use std::marker::Unpin;
 use std::sync::atomic;

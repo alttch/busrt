@@ -15,7 +15,10 @@ use crate::{OP_ACK, RESPONSE_OK};
 use async_trait::async_trait;
 use ipnetwork::IpNetwork;
 use log::{debug, error, trace, warn};
+#[cfg(not(feature = "rt"))]
 use parking_lot::Mutex as SyncMutex;
+#[cfg(feature = "rt")]
+use parking_lot_rt::Mutex as SyncMutex;
 #[cfg(feature = "rpc")]
 use serde::{Deserialize, Serialize};
 use std::collections::{hash_map, HashMap, HashSet};

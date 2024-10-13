@@ -4,6 +4,10 @@ use crate::EventChannel;
 use crate::{Error, Frame, FrameKind, OpConfirm, QoS};
 use async_trait::async_trait;
 use log::{error, trace, warn};
+#[cfg(not(feature = "rt"))]
+use parking_lot::Mutex as SyncMutex;
+#[cfg(feature = "rt")]
+use parking_lot_rt::Mutex as SyncMutex;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::atomic;
@@ -279,7 +283,7 @@ impl RpcHandlers for DummyHandlers {
     }
 }
 
-type CallMap = Arc<parking_lot::Mutex<BTreeMap<u32, oneshot::Sender<RpcEvent>>>>;
+type CallMap = Arc<SyncMutex<BTreeMap<u32, oneshot::Sender<RpcEvent>>>>;
 
 #[async_trait]
 pub trait Rpc {
@@ -316,10 +320,10 @@ pub trait Rpc {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct RpcClient {
-    call_id: parking_lot::Mutex<u32>,
+    call_id: SyncMutex<u32>,
     timeout: Option<Duration>,
     client: Arc<Mutex<dyn AsyncClient>>,
-    processor_fut: Arc<parking_lot::Mutex<JoinHandle<()>>>,
+    processor_fut: Arc<SyncMutex<JoinHandle<()>>>,
     pinger_fut: Option<JoinHandle<()>>,
     calls: CallMap,
     connected: Option<Arc<atomic::AtomicBool>>,
@@ -501,7 +505,7 @@ impl RpcClient {
         let connected = client.get_connected_beacon();
         let client = Arc::new(Mutex::new(client));
         let calls: CallMap = <_>::default();
-        let processor_fut = Arc::new(parking_lot::Mutex::new(tokio::spawn(processor(
+        let processor_fut = Arc::new(SyncMutex::new(tokio::spawn(processor(
             rx,
             client.clone(),
             calls.clone(),
@@ -523,7 +527,7 @@ impl RpcClient {
             })
         });
         Self {
-            call_id: parking_lot::Mutex::new(0),
+            call_id: SyncMutex::new(0),
             timeout,
             client,
             processor_fut,

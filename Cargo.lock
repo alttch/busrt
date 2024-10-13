@@ -310,6 +310,7 @@ dependencies = [
  "nix",
  "num-format",
  "parking_lot 0.12.1",
+ "parking_lot_rt",
  "prettytable-rs",
  "regex",
  "rmp-serde",
@@ -1528,6 +1529,16 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-sys 0.36.1",
+]
+
+[[package]]
+name = "parking_lot_rt"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7f9d3dba7751cf4b5ac6f3e9423cb573df1c927bb41808118ff1eb132dc9a50"
+dependencies = [
+ "lock_api",
+ "parking_lot_core 0.9.3",
 ]
 
 [[package]]
