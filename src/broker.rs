@@ -45,6 +45,8 @@ use crate::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
 
 pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 
+const MAX_SENDER_NAME_LEN: usize = 256; // not enforced but pre-allocates buffers
+
 pub const BROKER_INFO_TOPIC: &str = ".broker/info";
 pub const BROKER_WARN_TOPIC: &str = ".broker/warn";
 pub const BROKER_NAME: &str = ".broker";
@@ -1645,10 +1647,10 @@ impl Broker {
             time::timeout(timeout, reader.read_exact(&mut buf)).await??;
             macro_rules! send_ack {
                 ($code:expr, $realtime: expr) => {
-                    let mut buf = Vec::with_capacity(6);
-                    buf.push(OP_ACK);
-                    buf.extend_from_slice(op_id);
-                    buf.push($code);
+                    let mut buf = [0u8; 6];
+                    buf[0] = OP_ACK;
+                    buf[1..5].copy_from_slice(op_id);
+                    buf[5] = $code;
                     client.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
                     client
                         .w_bytes
@@ -1663,7 +1665,7 @@ impl Broker {
                             sender: None,
                             topic: None,
                             header: None,
-                            buf,
+                            buf: buf.to_vec(),
                             payload_pos: 0,
                             realtime: $realtime,
                         }))
@@ -1888,6 +1890,7 @@ impl Broker {
     where
         W: AsyncWriteExt + Unpin + Send + Sync + 'static,
     {
+        let mut buf = Vec::with_capacity(6 + MAX_SENDER_NAME_LEN);
         while let Ok(frame) = rx.recv().await {
             macro_rules! write_data {
                 ($data: expr, $flush: expr) => {
@@ -1907,7 +1910,7 @@ impl Broker {
                 if let Some(header) = frame.header.as_ref() {
                     extra_len += header.len();
                 }
-                let mut buf = Vec::with_capacity(6 + extra_len);
+                buf.clear();
                 buf.push(frame.kind as u8); // byte 0
                 let frame_len = extra_len + frame.buf.len() - frame.payload_pos;
                 #[allow(clippy::cast_possible_truncation)]
