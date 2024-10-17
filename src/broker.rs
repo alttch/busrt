@@ -1501,39 +1501,41 @@ impl Broker {
         let mut buf = [0u8; 2];
         time::timeout(timeout, reader.read_exact(&mut buf)).await??;
         let len = u16::from_le_bytes(buf);
-        let mut buf = vec![0; len as usize];
-        time::timeout(timeout, reader.read_exact(&mut buf)).await??;
-        let client_name = std::str::from_utf8(&buf)?.to_owned();
-        if client_name.is_empty() || client_name.starts_with('.') {
-            write_and_flush!(&[ERR_DATA]);
-            return Err(Error::data(format!("Invalid client name: {}", client_name)));
-        }
-        let client_primary_name = client_name
-            .find(SECONDARY_SEP)
-            .map_or_else(|| client_name.as_str(), |pos| &client_name[..pos]);
-        let aaa = if let Some(aaa_map) = params.aaa_map {
-            let aaa = aaa_map.lock().get(client_primary_name).cloned();
-            if let Some(ref a) = aaa {
-                if let ClientIp::Addr(addr) = params.ip {
-                    if !a.connect_allowed(addr) {
-                        write_and_flush!(&[ERR_ACCESS]);
-                        return Err(Error::access(format!(
-                            "Client {} is not allowed to connect from {}",
-                            client_name, addr
-                        )));
-                    }
-                }
-            } else {
-                write_and_flush!(&[ERR_ACCESS]);
-                return Err(Error::access(format!(
-                    "Client not in AAA map: {}",
-                    client_name
-                )));
+        let mut buf = Vec::new();
+        {
+            time::timeout(timeout, reader.read_exact(&mut buf)).await??;
+            let client_name = std::str::from_utf8(&buf)?.to_owned();
+            if client_name.is_empty() || client_name.starts_with('.') {
+                write_and_flush!(&[ERR_DATA]);
+                return Err(Error::data(format!("Invalid client name: {}", client_name)));
             }
-            aaa
-        } else {
-            None
-        };
+            let client_primary_name = client_name
+                .find(SECONDARY_SEP)
+                .map_or_else(|| client_name.as_str(), |pos| &client_name[..pos]);
+            let aaa = if let Some(aaa_map) = params.aaa_map {
+                let aaa = aaa_map.lock().get(client_primary_name).cloned();
+                if let Some(ref a) = aaa {
+                    if let ClientIp::Addr(addr) = params.ip {
+                        if !a.connect_allowed(addr) {
+                            write_and_flush!(&[ERR_ACCESS]);
+                            return Err(Error::access(format!(
+                                "Client {} is not allowed to connect from {}",
+                                client_name, addr
+                            )));
+                        }
+                    }
+                } else {
+                    write_and_flush!(&[ERR_ACCESS]);
+                    return Err(Error::access(format!(
+                        "Client not in AAA map: {}",
+                        client_name
+                    )));
+                }
+                aaa
+            } else {
+                None
+            };
+        }
         let (client, rx, disconnect_listener) = {
             let (c, rx, disconnect_listener) = BusRtClient::new(
                 &client_name,
@@ -1643,34 +1645,36 @@ impl Broker {
             let op: FrameOp = (flags & 0b0011_1111).try_into()?;
             let qos: QoS = (flags >> 6 & 0b0011_1111).try_into()?;
             let len = u32::from_le_bytes(header_buf[5..9].try_into().unwrap());
-            let mut buf = vec![0; len as usize];
-            time::timeout(timeout, reader.read_exact(&mut buf)).await??;
-            macro_rules! send_ack {
-                ($code:expr, $realtime: expr) => {
-                    let mut buf = [0u8; 6];
-                    buf[0] = OP_ACK;
-                    buf[1..5].copy_from_slice(op_id);
-                    buf[5] = $code;
-                    client.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
-                    client
-                        .w_bytes
-                        .fetch_add(buf.len() as u64, atomic::Ordering::Relaxed);
-                    db.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
-                    db.w_bytes
-                        .fetch_add(buf.len() as u64, atomic::Ordering::Relaxed);
-                    client
-                        .tx
-                        .send(Arc::new(FrameData {
-                            kind: FrameKind::Prepared,
-                            sender: None,
-                            topic: None,
-                            header: None,
-                            buf: buf.to_vec(),
-                            payload_pos: 0,
-                            realtime: $realtime,
-                        }))
-                        .await?;
-                };
+            let mut buf = Vec::new();
+            {
+                time::timeout(timeout, reader.read_exact(&mut buf)).await??;
+                macro_rules! send_ack {
+                    ($code:expr, $realtime: expr) => {
+                        let mut buf = [0u8; 6];
+                        buf[0] = OP_ACK;
+                        buf[1..5].copy_from_slice(op_id);
+                        buf[5] = $code;
+                        client.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                        client
+                            .w_bytes
+                            .fetch_add(buf.len() as u64, atomic::Ordering::Relaxed);
+                        db.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                        db.w_bytes
+                            .fetch_add(buf.len() as u64, atomic::Ordering::Relaxed);
+                        client
+                            .tx
+                            .send(Arc::new(FrameData {
+                                kind: FrameKind::Prepared,
+                                sender: None,
+                                topic: None,
+                                header: None,
+                                buf: buf.to_vec(),
+                                payload_pos: 0,
+                                realtime: $realtime,
+                            }))
+                            .await?;
+                    };
+                }
             }
             match op {
                 FrameOp::SubscribeTopic => {
