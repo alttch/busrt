@@ -48,7 +48,7 @@ Rust crate: <https://crates.io/crates/busrt>
 
 ## Real-time safety
 
-Use `rt` feature to use
+Use `rt` feature to use for internal mutexes
 [`parking_lot_rt`](https://crates.io/crates/parking_lot_rt) - a `parking_lot`
 fork without spin-locks, which is real-time safe.
 
