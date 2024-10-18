@@ -977,10 +977,17 @@ impl ClientAaa {
     }
 }
 
+#[async_trait]
+pub trait AsyncAllocator {
+    async fn allocate(&self, client_name: &str, size: usize) -> Option<Vec<u8>>;
+}
+
 pub struct Broker {
     db: Arc<BrokerDb>,
     services: Vec<JoinHandle<()>>,
     queue_size: usize,
+    direct_alloc_limit: Option<usize>,
+    async_allocator: Option<Arc<dyn AsyncAllocator + Send + Sync + 'static>>,
 }
 
 #[cfg(feature = "rpc")]
@@ -1105,6 +1112,8 @@ macro_rules! spawn_server {
         let socket_path = $path.to_owned();
         let db = $self.db.clone();
         let queue_size = $self.queue_size;
+        let direct_alloc_limit = $self.direct_alloc_limit;
+        let async_allocator = $self.async_allocator.clone();
         let service = tokio::spawn(async move {
             loop {
                 match $listener.accept().await {
@@ -1127,6 +1136,7 @@ macro_rules! spawn_server {
                         let client_source = $prepare_source(&addr);
                         let client_path = socket_path.clone();
                         let aaa_map = $config.aaa_map.clone();
+                        let async_allocator = async_allocator.clone();
                         tokio::spawn(async move {
                             if let Err(e) = Self::handle_peer(PeerHandlerParams {
                                 db: cdb,
@@ -1139,6 +1149,8 @@ macro_rules! spawn_server {
                                 kind: $kind,
                                 source: client_source,
                                 source_port: Some(client_path),
+                                direct_alloc_limit,
+                                async_allocator,
                             })
                             .await
                             {
@@ -1169,6 +1181,8 @@ where
     kind: BusRtClientKind,
     source: Option<String>,
     source_port: Option<String>,
+    direct_alloc_limit: Option<usize>,
+    async_allocator: Option<Arc<dyn AsyncAllocator + Send + Sync + 'static>>,
 }
 
 enum ClientIp {
@@ -1194,6 +1208,8 @@ impl Default for Broker {
             db: <_>::default(),
             services: <_>::default(),
             queue_size: DEFAULT_QUEUE_SIZE,
+            direct_alloc_limit: None,
+            async_allocator: None,
         }
     }
 }
@@ -1201,11 +1217,29 @@ impl Default for Broker {
 #[derive(Default, Clone)]
 pub struct Options {
     force_register: bool,
+    direct_alloc_limit: Option<usize>,
+    async_allocator: Option<Arc<dyn AsyncAllocator + Send + Sync + 'static>>,
 }
 
 impl Options {
+    /// Register client in case of a name conflict, disconnecting the previous instance
     pub fn force_register(mut self, force: bool) -> Self {
         self.force_register = force;
+        self
+    }
+    /// In case of real-time mode, direct memory allocations may slow down the async runtime. The
+    /// option allows to move large memory allocations to a separate async allocator, which may
+    /// allocate memory in a separate thread on a non-real-time CPU, use a buffer pool, etc. This
+    /// allows to combine both real-time and high-load scenarios, letting clients to work with
+    /// small messages in guarateed real-time mode, while large messages (above
+    /// `direct_alloc_limit`) slow down the sender only, having no impact on the broker.
+    pub fn with_async_allocator(
+        mut self,
+        direct_alloc_limit: usize,
+        async_allocator: Arc<dyn AsyncAllocator + Send + Sync + 'static>,
+    ) -> Self {
+        self.direct_alloc_limit = Some(direct_alloc_limit);
+        self.async_allocator.replace(async_allocator);
         self
     }
 }
@@ -1223,6 +1257,8 @@ impl Broker {
             db: Arc::new(db),
             services: <_>::default(),
             queue_size: DEFAULT_QUEUE_SIZE,
+            direct_alloc_limit: opts.direct_alloc_limit,
+            async_allocator: opts.async_allocator.clone(),
         }
     }
     #[inline]
@@ -1553,7 +1589,15 @@ impl Broker {
         };
         debug!("bus/rt client registered: {}", client_name);
         let pinger_fut = Self::handle_pinger(&client_name, client.tx.clone(), timeout);
-        let reader_fut = Self::handle_reader(&db, client.clone(), &mut reader, timeout, aaa);
+        let reader_fut = Self::handle_reader(
+            &db,
+            client.clone(),
+            &mut reader,
+            timeout,
+            aaa,
+            params.direct_alloc_limit,
+            params.async_allocator.as_ref(),
+        );
         let writer_fut = Self::handle_writer(rx, &mut writer, timeout);
         macro_rules! finish_peer {
             () => {
@@ -1621,10 +1665,13 @@ impl Broker {
         reader: &mut R,
         timeout: Duration,
         aaa: Option<ClientAaa>,
+        direct_alloc_limit: Option<usize>,
+        async_allocator: Option<&Arc<dyn AsyncAllocator + Send + Sync + 'static>>,
     ) -> Result<(), Error>
     where
         R: AsyncReadExt + Unpin,
     {
+        let client_name = &client.name;
         loop {
             let mut header_buf = [0u8; 9];
             let r_len = reader.read(&mut header_buf).await?;
@@ -1643,7 +1690,19 @@ impl Broker {
             let op: FrameOp = (flags & 0b0011_1111).try_into()?;
             let qos: QoS = (flags >> 6 & 0b0011_1111).try_into()?;
             let len = u32::from_le_bytes(header_buf[5..9].try_into().unwrap());
-            let mut buf = vec![0; len as usize];
+            let mut buf: Vec<u8> = if let Some(limit) = direct_alloc_limit {
+                if len as usize > limit {
+                    async_allocator
+                        .unwrap()
+                        .allocate(client_name, len as usize)
+                        .await
+                        .ok_or_else(|| Error::io(format!("Refused to allocate {} bytes", len)))?
+                } else {
+                    vec![0; len as usize]
+                }
+            } else {
+                vec![0; len as usize]
+            };
             time::timeout(timeout, reader.read_exact(&mut buf)).await??;
             macro_rules! send_ack {
                 ($code:expr, $realtime: expr) => {
