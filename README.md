@@ -1,4 +1,12 @@
-# BUS/RT - Rust-native IPC broker
+<h2>
+  BUS/RT - Rust-native IPC broker
+  <a href="https://crates.io/crates/busrt"><img alt="crates.io page" src="https://img.shields.io/crates/v/busrt.svg"></img></a>
+  <a href="https://docs.rs/busrt"><img alt="docs.rs page" src="https://docs.rs/busrt/badge.svg"></img></a>
+  <a href="https://github.com/alttch/busrt/actions/workflows/ci.yml">
+    <img alt="GitHub Actions CI" src="https://github.com/alttch/busrt/actions/workflows/ci.yml/badge.svg"></img>
+  </a>
+</h2>
+
 
 <img src="https://raw.githubusercontent.com/alttch/busrt/main/images/logo-dark.svg"
 width="200" />
@@ -7,7 +15,8 @@ width="200" />
 
 BUS/RT® is a Rust-native IPC broker, written in Rust/Tokio, inspired by
 [NATS](https://nats.io), [ZeroMQ](https://zeromq.org) and
-[Nanomsg](https://nanomsg.org). BUS/RT is fast, flexible and very easy to use.
+[Nanomsg](https://nanomsg.org). BUS/RT is fast, flexible and very easy to use,
+optimized for both high-load and ultra-low latency real-time scenarios.
 
 The library can be embedded in any Rust project or be used as a standalone
 server.
