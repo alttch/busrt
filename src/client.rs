@@ -30,10 +30,20 @@ pub trait AsyncClient: Send + Sync {
     ) -> Result<OpConfirm, Error>;
     async fn publish(
         &mut self,
-        target: &str,
+        topic: &str,
         payload: Cow<'async_trait>,
         qos: QoS,
     ) -> Result<OpConfirm, Error>;
+    #[allow(unused_variables)]
+    async fn publish_for(
+        &mut self,
+        topic: &str,
+        receiver: &str,
+        payload: Cow<'async_trait>,
+        qos: QoS,
+    ) -> Result<OpConfirm, Error> {
+        Err(Error::not_supported("publish_for"))
+    }
     async fn subscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error>;
     async fn unsubscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error>;
     async fn subscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error>;

@@ -13,6 +13,7 @@ pub const OP_SUBSCRIBE: u8 = 0x02;
 pub const OP_UNSUBSCRIBE: u8 = 0x03;
 pub const OP_EXCLUDE: u8 = 0x04;
 pub const OP_UNEXCLUDE: u8 = 0x05;
+pub const OP_PUBLISH_FOR: u8 = 0x06;
 pub const OP_MESSAGE: u8 = 0x12;
 pub const OP_BROADCAST: u8 = 0x13;
 pub const OP_ACK: u8 = 0xFE;
@@ -301,6 +302,7 @@ pub enum FrameOp {
     Message = OP_MESSAGE,
     Broadcast = OP_BROADCAST,
     PublishTopic = OP_PUBLISH,
+    PublishTopicFor = OP_PUBLISH_FOR,
     SubscribeTopic = OP_SUBSCRIBE,
     UnsubscribeTopic = OP_UNSUBSCRIBE,
     ExcludeTopic = OP_EXCLUDE,
@@ -317,6 +319,7 @@ impl TryFrom<u8> for FrameOp {
             OP_MESSAGE => Ok(FrameOp::Message),
             OP_BROADCAST => Ok(FrameOp::Broadcast),
             OP_PUBLISH => Ok(FrameOp::PublishTopic),
+            OP_PUBLISH_FOR => Ok(FrameOp::PublishTopicFor),
             OP_SUBSCRIBE => Ok(FrameOp::SubscribeTopic),
             OP_UNSUBSCRIBE => Ok(FrameOp::UnsubscribeTopic),
             OP_EXCLUDE => Ok(FrameOp::ExcludeTopic),

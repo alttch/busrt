@@ -110,9 +110,10 @@ pub struct Client {
 // keep these as macros to insure inline and avoid unecc. futures
 
 macro_rules! prepare_frame_buf {
-    ($self: expr, $op: expr, $qos: expr) => {{
+    ($self: expr, $op: expr, $qos: expr, $expected_header_len: expr) => {{
         $self.increment_frame_id();
-        let mut buf = $self.frame_id.to_le_bytes().to_vec();
+        let mut buf = Vec::with_capacity($expected_header_len + 4 + 1);
+        buf.extend($self.frame_id.to_le_bytes());
         buf.push($op as u8 | ($qos as u8) << 6);
         buf
     }};
@@ -152,21 +153,11 @@ macro_rules! send_frame_and_confirm {
     }};
 }
 
-macro_rules! send_frame {
-    // send to target or topic
-    ($self: expr, $target: expr, $payload: expr, $op: expr, $qos: expr) => {{
-        let mut buf = prepare_frame_buf!($self, $op, $qos);
-        let t = $target.as_bytes();
-        buf.extend_from_slice(&((t.len() + $payload.len() + 1) as u32).to_le_bytes());
-        buf.extend_from_slice(t);
-        buf.push(0x00);
-        trace!("sending busrt {:?} to {} QoS={:?}", $op, $target, $qos);
-        send_frame_and_confirm!($self, &buf, $payload, $qos)
-    }};
+macro_rules! send_zc_frame {
     // zc-send to target or topic
     ($self: expr, $target: expr, $header: expr, $payload: expr, $op: expr, $qos: expr) => {{
-        let mut buf = prepare_frame_buf!($self, $op, $qos);
         let t = $target.as_bytes();
+        let mut buf = prepare_frame_buf!($self, $op, $qos, 4 + t.len() + 1 + $header.len());
         buf.extend_from_slice(
             &((t.len() + $payload.len() + $header.len() + 1) as u32).to_le_bytes(),
         );
@@ -176,9 +167,35 @@ macro_rules! send_frame {
         trace!("sending busrt {:?} to {} QoS={:?}", $op, $target, $qos);
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};
+}
+
+macro_rules! send_frame {
+    // send to target or topic
+    ($self: expr, $target: expr, $payload: expr, $op: expr, $qos: expr) => {{
+        let t = $target.as_bytes();
+        let mut buf = prepare_frame_buf!($self, $op, $qos, 4 + t.len() + 1);
+        buf.extend_from_slice(&((t.len() + $payload.len() + 1) as u32).to_le_bytes());
+        buf.extend_from_slice(t);
+        buf.push(0x00);
+        trace!("sending busrt {:?} to {} QoS={:?}", $op, $target, $qos);
+        send_frame_and_confirm!($self, &buf, $payload, $qos)
+    }};
+    // send to topic with a receiver
+    ($self: expr, $target: expr, $receiver: expr, $payload: expr, $op: expr, $qos: expr) => {{
+        let t = $target.as_bytes();
+        let r = $receiver.as_bytes();
+        let mut buf = prepare_frame_buf!($self, $op, $qos, 4 + t.len() + 1 + r.len() + 1);
+        buf.extend_from_slice(&((t.len() + r.len() + $payload.len() + 2) as u32).to_le_bytes());
+        buf.extend_from_slice(t);
+        buf.push(0x00);
+        buf.extend_from_slice(r);
+        buf.push(0x00);
+        trace!("sending busrt {:?} to {} QoS={:?}", $op, $target, $qos);
+        send_frame_and_confirm!($self, &buf, $payload, $qos)
+    }};
     // send w/o a target
     ($self: expr, $payload: expr, $op: expr, $qos: expr) => {{
-        let mut buf = prepare_frame_buf!($self, $op, $qos);
+        let mut buf = prepare_frame_buf!($self, $op, $qos, 4);
         buf.extend_from_slice(&($payload.len() as u32).to_le_bytes());
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};
@@ -333,7 +350,7 @@ impl AsyncClient for Client {
         payload: Cow<'async_trait>,
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
-        send_frame!(
+        send_zc_frame!(
             self,
             target,
             header.as_slice(),
@@ -357,6 +374,22 @@ impl AsyncClient for Client {
         qos: QoS,
     ) -> Result<OpConfirm, Error> {
         send_frame!(self, target, payload.as_slice(), FrameOp::PublishTopic, qos)
+    }
+    async fn publish_for(
+        &mut self,
+        target: &str,
+        receiver: &str,
+        payload: Cow<'async_trait>,
+        qos: QoS,
+    ) -> Result<OpConfirm, Error> {
+        send_frame!(
+            self,
+            target,
+            receiver,
+            payload.as_slice(),
+            FrameOp::PublishTopicFor,
+            qos
+        )
     }
     async fn subscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
         send_frame!(self, topic.as_bytes(), FrameOp::SubscribeTopic, qos)

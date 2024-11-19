@@ -206,6 +206,41 @@ macro_rules! publish {
             }
         }
     }};
+    ($db:expr, $client:expr, $topic:expr, $receiver: expr, $header: expr,
+     $buf:expr, $payload_pos:expr, $len: expr, $realtime: expr, $timeout: expr) => {{
+        $client.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+        $client.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
+        $db.r_frames.fetch_add(1, atomic::Ordering::Relaxed);
+        $db.r_bytes.fetch_add($len, atomic::Ordering::Relaxed);
+        trace!("bus/rt topic publish from {} to {}", $client, $topic);
+        #[allow(clippy::mutable_key_type)]
+        let mut subs = { $db.subscriptions.lock().get_subscribers($topic) };
+        subs.retain(|sub| {
+            sub.primary_name == $receiver
+                && (!sub.has_exclusions.load(atomic::Ordering::Acquire)
+                    || !sub.exclusions.lock().matches($topic))
+        });
+        if !subs.is_empty() {
+            let frame = Arc::new(FrameData {
+                kind: FrameKind::Publish,
+                sender: Some($client.name.clone()),
+                topic: Some($topic.to_owned()),
+                header: $header,
+                buf: $buf,
+                payload_pos: $payload_pos,
+                realtime: $realtime,
+            });
+            $db.w_frames
+                .fetch_add(subs.len() as u64, atomic::Ordering::Relaxed);
+            $db.w_bytes
+                .fetch_add($len * subs.len() as u64, atomic::Ordering::Relaxed);
+            for sub in subs {
+                sub.w_frames.fetch_add(1, atomic::Ordering::Relaxed);
+                sub.w_bytes.fetch_add($len, atomic::Ordering::Relaxed);
+                let _r = safe_send_frame!($db, sub, frame.clone(), $timeout);
+            }
+        }
+    }};
 }
 
 pub struct Client {
@@ -387,6 +422,29 @@ impl AsyncClient for Client {
             self.db,
             self.client,
             topic,
+            None,
+            payload.to_vec(),
+            0,
+            len,
+            qos.is_realtime(),
+            self.get_timeout()
+        );
+        make_confirm_channel!(qos)
+    }
+    #[inline]
+    async fn publish_for(
+        &mut self,
+        topic: &str,
+        receiver: &str,
+        payload: Cow<'async_trait>,
+        qos: QoS,
+    ) -> Result<OpConfirm, Error> {
+        let len = payload.len() as u64;
+        publish!(
+            self.db,
+            self.client,
+            topic,
+            receiver,
             None,
             payload.to_vec(),
             0,
@@ -1920,6 +1978,39 @@ impl Broker {
                                     db,
                                     client,
                                     target,
+                                    None,
+                                    buf,
+                                    payload_pos,
+                                    len,
+                                    realtime,
+                                    Some(timeout)
+                                );
+                                if qos.needs_ack() {
+                                    send_ack!(RESPONSE_OK, realtime);
+                                }
+                            } else if qos.needs_ack() {
+                                send_ack!(ERR_ACCESS, qos.is_realtime());
+                            }
+                        }
+                        FrameOp::PublishTopicFor => {
+                            let mut sp = buf[payload_pos..].splitn(2, |c| *c == 0);
+                            let recv = sp.next().ok_or_else(|| Error::data("broken frame"))?;
+                            let receiver = std::str::from_utf8(recv)?;
+                            sp.next().ok_or_else(|| Error::data("broken frame"))?;
+                            let payload_pos = payload_pos + recv.len() + 1;
+                            let allowed = if let Some(ref aaa) = aaa {
+                                aaa.allow_publish_any || aaa.allow_publish_to.matches(target)
+                            } else {
+                                true
+                            };
+                            if allowed {
+                                let len = buf.len() as u64;
+                                let realtime = qos.is_realtime();
+                                publish!(
+                                    db,
+                                    client,
+                                    target,
+                                    receiver,
                                     None,
                                     buf,
                                     payload_pos,
