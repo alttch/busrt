@@ -1,6 +1,6 @@
 [package]
 name = "busrt"
-version = "0.4.13"
+version = "0.4.14"
 edition = "2021"
 authors = ["Serhij S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -25,7 +25,7 @@ syslog = { version = "5.0.0", optional = true }
 chrono = { version = "0.4.19", optional = true }
 colored = { version = "2", optional = true }
 clap = { version = "3.0.7", features = ["derive"], optional = true }
-submap = { version = "0.2.8", optional = true, features = ["native-digest"] }
+submap = { version = "0.2.8", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
 jemallocator = { version = "0.5.0", optional = true }
 fork = { version = "0.1.18", optional = true }
@@ -57,7 +57,7 @@ parking_lot_rt = { version = "0.12.1", optional = true }
 
 [features]
 server = ["log", "syslog", "chrono", "colored", "clap", "lazy_static", "jemallocator", "fork", "broker"]
-broker = ["log", "submap", "async-trait", "unix-named-pipe", "nix", "ipnetwork", "triggered", "parking_lot"]
+broker = ["log", "submap/native-digest", "async-trait", "unix-named-pipe", "nix", "ipnetwork", "triggered", "parking_lot"]
 ipc = ["log", "async-trait"]
 rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value", "parking_lot", "regex", "tokio-task-pool"]
 cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark", "prettytable-rs", "hostname", "hex", "num-format", "jemallocator", "serde_json", "atty"]
