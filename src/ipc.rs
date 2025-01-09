@@ -158,6 +158,7 @@ macro_rules! send_zc_frame {
     ($self: expr, $target: expr, $header: expr, $payload: expr, $op: expr, $qos: expr) => {{
         let t = $target.as_bytes();
         let mut buf = prepare_frame_buf!($self, $op, $qos, 4 + t.len() + 1 + $header.len());
+        #[allow(clippy::cast_possible_truncation)]
         buf.extend_from_slice(
             &((t.len() + $payload.len() + $header.len() + 1) as u32).to_le_bytes(),
         );
@@ -174,6 +175,7 @@ macro_rules! send_frame {
     ($self: expr, $target: expr, $payload: expr, $op: expr, $qos: expr) => {{
         let t = $target.as_bytes();
         let mut buf = prepare_frame_buf!($self, $op, $qos, 4 + t.len() + 1);
+        #[allow(clippy::cast_possible_truncation)]
         buf.extend_from_slice(&((t.len() + $payload.len() + 1) as u32).to_le_bytes());
         buf.extend_from_slice(t);
         buf.push(0x00);
@@ -185,6 +187,7 @@ macro_rules! send_frame {
         let t = $target.as_bytes();
         let r = $receiver.as_bytes();
         let mut buf = prepare_frame_buf!($self, $op, $qos, 4 + t.len() + 1 + r.len() + 1);
+        #[allow(clippy::cast_possible_truncation)]
         buf.extend_from_slice(&((t.len() + r.len() + $payload.len() + 2) as u32).to_le_bytes());
         buf.extend_from_slice(t);
         buf.push(0x00);
@@ -196,6 +199,7 @@ macro_rules! send_frame {
     // send w/o a target
     ($self: expr, $payload: expr, $op: expr, $qos: expr) => {{
         let mut buf = prepare_frame_buf!($self, $op, $qos, 4);
+        #[allow(clippy::cast_possible_truncation)]
         buf.extend_from_slice(&($payload.len() as u32).to_le_bytes());
         send_frame_and_confirm!($self, &buf, $payload, $qos)
     }};

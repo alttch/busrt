@@ -58,7 +58,7 @@ parking_lot_rt = { version = "0.12.1", optional = true }
 [features]
 server = ["log", "syslog", "chrono", "colored", "clap", "lazy_static", "jemallocator", "fork", "broker"]
 broker = ["log", "submap/native-digest", "async-trait", "unix-named-pipe", "nix", "ipnetwork", "triggered", "parking_lot"]
-ipc = ["log", "async-trait"]
+ipc = ["log", "async-trait", "parking_lot"]
 rpc = ["log", "serde", "rmp-serde", "async-trait", "serde-value", "parking_lot", "regex", "tokio-task-pool"]
 cli = ["ipc", "rpc", "colored", "clap", "env_logger", "bma-benchmark", "prettytable-rs", "hostname", "hex", "num-format", "jemallocator", "serde_json", "atty"]
 openssl-vendored = ["submap/openssl-vendored"]
