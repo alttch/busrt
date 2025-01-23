@@ -27,7 +27,6 @@ colored = { version = "2", optional = true }
 clap = { version = "3.0.7", features = ["derive"], optional = true }
 submap = { version = "0.3.3", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
-jemallocator = { version = "0.5.0", optional = true }
 fork = { version = "0.1.18", optional = true }
 rmp-serde = { version = "1.1.0", optional = true }
 serde = { version = "1.0.143", features = ["derive"], optional = true }
@@ -54,10 +53,11 @@ futures = { version = "0.3.26", optional = true }
 regex = { version = "1.8.1", optional = true }
 tokio-task-pool = { version = "0.1.3", optional = true }
 parking_lot_rt = { version = "0.12.1", optional = true }
+mimalloc = { version = "0.1.43", optional = true }
 
 [features]
 server = ["dep:log", "dep:syslog", "dep:chrono", "dep:colored",
-  "dep:clap", "dep:lazy_static", "dep:jemallocator", "dep:fork", "broker"]
+  "dep:clap", "dep:lazy_static", "dep:mimalloc", "dep:fork", "broker"]
 broker = ["dep:log", "submap/native-digest", "dep:async-trait", "dep:unix-named-pipe", "dep:nix",
   "dep:ipnetwork", "dep:triggered", "dep:parking_lot"]
 ipc = ["dep:log", "dep:async-trait", "dep:parking_lot"]
@@ -65,7 +65,7 @@ rpc = ["dep:log", "dep:serde", "dep:rmp-serde", "dep:async-trait", "dep:serde-va
   "dep:regex", "dep:tokio-task-pool"]
 cli = ["ipc", "rpc", "dep:colored", "dep:clap", "dep:env_logger",
   "dep:bma-benchmark", "dep:prettytable-rs", "dep:hostname", "dep:hex",
-  "dep:num-format", "dep:jemallocator", "dep:serde_json", "dep:atty"]
+  "dep:num-format", "dep:mimalloc", "dep:serde_json", "dep:atty"]
 openssl-vendored = ["submap/openssl-vendored"]
 full = ["rpc", "ipc", "broker"]
 cursors = ["rpc", "dep:uuid"]

@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 #[cfg(not(feature = "std-alloc"))]
 #[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use chrono::prelude::*;
 use clap::Parser;
