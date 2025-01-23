@@ -245,9 +245,9 @@ dependencies = [
 
 [[package]]
 name = "bma-benchmark"
-version = "0.0.20"
+version = "0.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c598214120cccfa036fe40e73bd2713243e4e8ed3787afb1514300fb850ffb9"
+checksum = "fd3b42bf7c33cc46a610ad2148d7bd574d2771a919e447e14ba98542ecd2e9a7"
 dependencies = [
  "bma-benchmark-proc",
  "colored",
