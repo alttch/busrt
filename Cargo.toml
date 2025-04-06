@@ -1,6 +1,6 @@
 [package]
 name = "busrt"
-version = "0.4.17"
+version = "0.4.18"
 edition = "2021"
 authors = ["Serhij S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -25,7 +25,7 @@ syslog = { version = "5.0.0", optional = true }
 chrono = { version = "0.4.19", optional = true }
 colored = { version = "2", optional = true }
 clap = { version = "3.0.7", features = ["derive"], optional = true }
-submap = { version = "0.3.3", optional = true }
+submap = { version = "0.3", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
 fork = { version = "0.1.18", optional = true }
 rmp-serde = { version = "1.1.0", optional = true }
@@ -48,7 +48,7 @@ async-io = "1.8.0"
 parking_lot = { version = "0.12.1", optional = true }
 console-subscriber = { version = "0.1.7", optional = true }
 uuid = { version = "1.3.0", features = ["serde", "v4"], optional = true }
-sqlx = { version = "0.6.2", features = ["postgres", "runtime-tokio-rustls"], optional = true }
+sqlx = { version = "0.6", features = ["postgres", "runtime-tokio-rustls"], optional = true }
 futures = { version = "0.3.26", optional = true }
 regex = { version = "1.8.1", optional = true }
 tokio-task-pool = { version = "0.1.3", optional = true }
@@ -58,7 +58,7 @@ mimalloc = { version = "0.1.43", optional = true }
 [features]
 server = ["dep:log", "dep:syslog", "dep:chrono", "dep:colored",
   "dep:clap", "dep:lazy_static", "dep:mimalloc", "dep:fork", "broker"]
-broker = ["dep:log", "submap/native-digest", "dep:async-trait", "dep:unix-named-pipe", "dep:nix",
+broker = ["dep:log", "submap/digest", "dep:async-trait", "dep:unix-named-pipe", "dep:nix",
   "dep:ipnetwork", "dep:triggered", "dep:parking_lot"]
 ipc = ["dep:log", "dep:async-trait", "dep:parking_lot"]
 rpc = ["dep:log", "dep:serde", "dep:rmp-serde", "dep:async-trait", "dep:serde-value", "dep:parking_lot",
@@ -66,7 +66,7 @@ rpc = ["dep:log", "dep:serde", "dep:rmp-serde", "dep:async-trait", "dep:serde-va
 cli = ["ipc", "rpc", "dep:colored", "dep:clap", "dep:env_logger",
   "dep:bma-benchmark", "dep:prettytable-rs", "dep:hostname", "dep:hex",
   "dep:num-format", "dep:mimalloc", "dep:serde_json", "dep:atty"]
-openssl-vendored = ["submap/openssl-vendored"]
+openssl-vendored = []
 full = ["rpc", "ipc", "broker"]
 cursors = ["rpc", "dep:uuid"]
 std-alloc = []
