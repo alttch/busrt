@@ -1,5 +1,5 @@
 use crate::borrow::Cow;
-use crate::{Error, Frame, OpConfirm, QoS};
+use crate::{Error, EventChannel, OpConfirm, QoS};
 
 use async_trait::async_trait;
 use std::sync::{atomic, Arc};
@@ -8,7 +8,7 @@ use std::time::Duration;
 #[allow(clippy::module_name_repetitions)]
 #[async_trait]
 pub trait AsyncClient: Send + Sync {
-    fn take_event_channel(&mut self) -> Option<async_channel::Receiver<Frame>>;
+    fn take_event_channel(&mut self) -> Option<EventChannel>;
     async fn send(
         &mut self,
         target: &str,
@@ -63,11 +63,4 @@ pub trait AsyncClient: Send + Sync {
     fn get_connected_beacon(&self) -> Option<Arc<atomic::AtomicBool>>;
     fn get_timeout(&self) -> Option<Duration>;
     fn get_name(&self) -> &str;
-}
-
-#[macro_export]
-macro_rules! empty_payload {
-    () => {
-        $crate::borrow::Cow::Borrowed(&[])
-    };
 }

@@ -10,6 +10,9 @@ test:
 	clippy --features rpc
 	clippy --features cli
 	clippy --features server,rpc
+	clippy --features ipc-sync
+	clippy --features ipc-sync,rpc-sync
+	clippy --features rt
 
 tag:
 	git tag -a v${VERSION} -m v${VERSION}

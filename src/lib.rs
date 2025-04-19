@@ -66,9 +66,27 @@ pub const SECONDARY_SEP: &str = "%%";
 ///     Err(e) => { /* the server has returned an error */ }
 /// }
 /// ```
+#[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]
 pub type OpConfirm = Option<tokio::sync::oneshot::Receiver<Result<(), Error>>>;
 pub type Frame = Arc<FrameData>;
 pub type EventChannel = async_channel::Receiver<Frame>;
+
+#[cfg(all(any(feature = "ipc-sync", feature = "rpc-sync"), feature = "rt"))]
+type RawMutex = rtsc::pi::RawMutex;
+#[cfg(all(any(feature = "ipc-sync", feature = "rpc-sync"), feature = "rt"))]
+type Condvar = rtsc::pi::Condvar;
+#[cfg(all(any(feature = "ipc-sync", feature = "rpc-sync"), not(feature = "rt")))]
+type RawMutex = parking_lot::RawMutex;
+#[cfg(all(any(feature = "ipc-sync", feature = "rpc-sync"), not(feature = "rt")))]
+type Condvar = parking_lot::Condvar;
+
+#[cfg(any(feature = "ipc-sync", feature = "rpc-sync"))]
+pub type SyncEventChannel = rtsc::channel::Receiver<Frame, RawMutex, Condvar>;
+#[cfg(any(feature = "ipc-sync", feature = "rpc-sync"))]
+type SyncEventSender = rtsc::channel::Sender<Frame, RawMutex, Condvar>;
+
+#[cfg(any(feature = "ipc-sync", feature = "rpc-sync"))]
+pub type SyncOpConfirm = Option<oneshot::Receiver<Result<(), Error>>>;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(u8)]
@@ -227,6 +245,7 @@ impl IntoBusRtResult for u8 {
     }
 }
 
+#[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]
 impl From<tokio::time::error::Elapsed> for Error {
     fn from(_e: tokio::time::error::Elapsed) -> Error {
         Error::timeout()
@@ -286,6 +305,7 @@ impl<T> From<async_channel::SendError<T>> for Error {
     }
 }
 
+#[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]
 impl From<tokio::sync::oneshot::error::RecvError> for Error {
     fn from(_e: tokio::sync::oneshot::error::RecvError) -> Error {
         Error {
@@ -492,10 +512,19 @@ pub mod broker;
 pub mod cursors;
 #[cfg(feature = "ipc")]
 pub mod ipc;
-#[cfg(feature = "rpc")]
+#[cfg(any(feature = "rpc", feature = "rpc-sync"))]
 pub mod rpc;
+#[cfg(any(feature = "ipc-sync", feature = "rpc-sync"))]
+pub mod sync;
 
 #[cfg(any(feature = "rpc", feature = "broker", feature = "ipc"))]
 pub mod client;
 #[cfg(any(feature = "broker", feature = "ipc"))]
 pub mod comm;
+
+#[macro_export]
+macro_rules! empty_payload {
+    () => {
+        $crate::borrow::Cow::Borrowed(&[])
+    };
+}

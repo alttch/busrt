@@ -11,14 +11,14 @@ keywords = ["bus", "rt", "ipc", "pubsub"]
 autoexamples = false
 
 [package.metadata.docs.rs]
-features = ["broker", "ipc", "rpc", "cursors"]
+features = ["broker", "ipc", "rpc", "ipc-sync", "rpc-sync", "cursors"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.playground]
-features = ["broker", "ipc", "rpc", "cursors"]
+features = ["broker", "ipc", "rpc", "ipc-sync", "rpc-sync", "cursors"]
 
 [dependencies]
-tokio = { version = "1.20.1", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"], optional = true }
 async-channel = "1.7.1"
 log = { version = "0.4.14", optional = true }
 syslog = { version = "5.0.0", optional = true }
@@ -54,20 +54,24 @@ regex = { version = "1.8.1", optional = true }
 tokio-task-pool = { version = "0.1.3", optional = true }
 parking_lot_rt = { version = "0.12.1", optional = true }
 mimalloc = { version = "0.1.46", optional = true }
+rtsc = { version =  "0.3.15", optional = true, features = ["parking_lot"] }
+oneshot = "0.1.11"
 
 [features]
 server = ["dep:log", "dep:syslog", "dep:chrono", "dep:colored",
   "dep:clap", "dep:lazy_static", "dep:mimalloc", "dep:fork", "broker"]
 broker = ["dep:log", "submap/digest", "dep:async-trait", "dep:unix-named-pipe", "dep:nix",
-  "dep:ipnetwork", "dep:triggered", "dep:parking_lot"]
-ipc = ["dep:log", "dep:async-trait", "dep:parking_lot"]
+  "dep:ipnetwork", "dep:triggered", "dep:parking_lot", "dep:tokio"]
+ipc = ["dep:log", "dep:async-trait", "dep:parking_lot", "dep:tokio"]
+ipc-sync = ["dep:log", "dep:parking_lot", "dep:rtsc"]
 rpc = ["dep:log", "dep:serde", "dep:rmp-serde", "dep:async-trait", "dep:serde-value", "dep:parking_lot",
-  "dep:regex", "dep:tokio-task-pool"]
+  "dep:regex", "dep:tokio-task-pool", "dep:tokio"]
+rpc-sync = ["dep:rtsc", "dep:rmp-serde", "dep:parking_lot", "dep:log", "dep:regex"]
 cli = ["ipc", "rpc", "dep:colored", "dep:clap", "dep:env_logger",
   "dep:bma-benchmark", "dep:prettytable-rs", "dep:hostname", "dep:hex",
   "dep:num-format", "dep:mimalloc", "dep:serde_json", "dep:atty"]
 openssl-vendored = []
-full = ["rpc", "ipc", "broker"]
+full = ["rpc", "ipc", "broker", "ipc-sync"]
 cursors = ["rpc", "dep:uuid"]
 std-alloc = []
 tracing = ["tokio/tracing", "dep:console-subscriber"]
