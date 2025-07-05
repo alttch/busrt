@@ -1,5 +1,9 @@
 use crate::rpc::RpcError;
 use async_trait::async_trait;
+#[cfg(not(feature = "rt"))]
+use parking_lot::Mutex as SyncMutex;
+#[cfg(feature = "rt")]
+use parking_lot_rt::Mutex as SyncMutex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic;
@@ -80,6 +84,7 @@ impl Map {
     /// Call "next" method of the cursor, specified by UUID
     pub async fn next(&self, cursor_id: &Uuid) -> Result<Option<Vec<u8>>, RpcError> {
         if let Some(cursor) = self.data.read().await.get(cursor_id) {
+            cursor.meta().touch();
             Ok(cursor.next().await?)
         } else {
             Err(RpcError::not_found(None))
@@ -92,6 +97,7 @@ impl Map {
         count: usize,
     ) -> Result<Option<Vec<u8>>, RpcError> {
         if let Some(cursor) = self.data.read().await.get(cursor_id) {
+            cursor.meta().touch();
             Ok(Some(cursor.next_bulk(count).await?))
         } else {
             Err(RpcError::not_found(None))
@@ -128,15 +134,17 @@ pub trait Cursor {
 /// The cursor meta object, used by cursors::Map to manage finished/expired cursors
 pub struct Meta {
     finished: atomic::AtomicBool,
-    expires: Instant,
+    expires: SyncMutex<Instant>,
+    ttl: Duration,
 }
 
 impl Meta {
     #[inline]
     pub fn new(ttl: Duration) -> Self {
         Self {
-            expires: Instant::now() + ttl,
+            expires: SyncMutex::new(Instant::now() + ttl),
             finished: <_>::default(),
+            ttl,
         }
     }
     #[inline]
@@ -145,7 +153,7 @@ impl Meta {
     }
     #[inline]
     pub fn is_expired(&self) -> bool {
-        self.expires < Instant::now()
+        *self.expires.lock() < Instant::now()
     }
     #[inline]
     pub fn mark_finished(&self) {
@@ -154,5 +162,10 @@ impl Meta {
     #[inline]
     pub fn is_alive(&self) -> bool {
         !self.is_finished() && !self.is_expired()
+    }
+    #[inline]
+    fn touch(&self) {
+        let mut expires = self.expires.lock();
+        *expires = Instant::now() + self.ttl;
     }
 }
