@@ -49,7 +49,7 @@ pub trait SyncRpc {
     ///
     /// This mehtod allows to get the containered-client back, to call its methods directly (manage
     /// pub/sub and send broadcast messages)
-    fn client(&self) -> Arc<Mutex<(dyn SyncClient + 'static)>>;
+    fn client(&self) -> Arc<Mutex<(dyn SyncClient + Send + 'static)>>;
     fn notify(&self, target: &str, data: Cow<'_>, qos: QoS) -> Result<SyncOpConfirm, Error>;
     /// Call the method, no response is required
     fn call0(
@@ -74,7 +74,7 @@ pub trait SyncRpc {
 pub struct RpcClient {
     call_id: Mutex<u32>,
     timeout: Option<Duration>,
-    client: Arc<Mutex<dyn SyncClient>>,
+    client: Arc<Mutex<dyn SyncClient + Send>>,
     calls: CallMap,
     connected: Option<Arc<atomic::AtomicBool>>,
 }
@@ -240,7 +240,7 @@ impl RpcClient {
 
 impl SyncRpc for RpcClient {
     #[inline]
-    fn client(&self) -> Arc<Mutex<(dyn SyncClient + 'static)>> {
+    fn client(&self) -> Arc<Mutex<(dyn SyncClient + Send + 'static)>> {
         self.client.clone()
     }
     #[inline]
