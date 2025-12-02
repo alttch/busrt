@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use atty::Stream;
 use busrt::client::AsyncClient;
 use busrt::common::{BrokerInfo, BrokerStats, ClientList};
 use busrt::ipc::{Client, Config};
@@ -7,6 +6,7 @@ use busrt::rpc::{DummyHandlers, Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers,
 use busrt::{empty_payload, Error, Frame, QoS};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use is_terminal::IsTerminal;
 use log::{error, info};
 use num_format::{Locale, ToFormattedString};
 use serde_value::Value;
@@ -348,7 +348,7 @@ impl RpcHandlers for Handlers {
 async fn read_stdin() -> Vec<u8> {
     let mut stdin = tokio::io::stdin();
     let mut buf: Vec<u8> = Vec::new();
-    if atty::is(Stream::Stdin) {
+    if stdin.is_terminal() {
         println!("Reading stdin, Ctrl-D to finish...");
     }
     stdin.read_to_end(&mut buf).await.unwrap();

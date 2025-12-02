@@ -297,6 +297,7 @@ impl From<Error> for RpcError {
     }
 }
 
+#[cfg(feature = "broker-rpc")]
 impl From<rmp_serde::encode::Error> for RpcError {
     #[inline]
     fn from(e: rmp_serde::encode::Error) -> RpcError {
@@ -327,6 +328,7 @@ impl From<std::io::Error> for RpcError {
     }
 }
 
+#[cfg(feature = "broker-rpc")]
 impl From<rmp_serde::decode::Error> for RpcError {
     #[inline]
     fn from(e: rmp_serde::decode::Error) -> RpcError {

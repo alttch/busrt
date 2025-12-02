@@ -1,6 +1,6 @@
 [package]
 name = "busrt"
-version = "0.4.22"
+version = "0.5.0"
 edition = "2021"
 authors = ["Serhij S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -21,57 +21,58 @@ features = ["broker", "ipc", "rpc", "ipc-sync", "rpc-sync", "cursors"]
 tokio = { version = "1.20.1", features = ["full"], optional = true }
 async-channel = "1.7.1"
 log = { version = "0.4.14", optional = true }
-syslog = { version = "5.0.0", optional = true }
+syslog = { version = "7.0.0", optional = true }
 chrono = { version = "0.4.19", optional = true }
 colored = { version = "2", optional = true }
-clap = { version = "3.0.7", features = ["derive"], optional = true }
+clap = { version = "4.5.53", features = ["derive"], optional = true }
 submap = { version = "0.3", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
 fork = { version = "0.1.18", optional = true }
-rmp-serde = { version = "1.1.0", optional = true }
+rmp-serde = { version = "1.3.0", optional = true }
 serde = { version = "1.0.143", features = ["derive"], optional = true }
 async-trait = { version = "0.1.57", optional = true }
 unix-named-pipe = { version = "0.2.0", optional = true }
 serde_json = { version = "1.0.83", optional = true }
 bma-benchmark = { version = "0.0.24", optional = true }
 prettytable-rs = { version = "0.10", optional = true }
-env_logger = { version = "0.9.0", optional = true }
+env_logger = { version = "0.11.8", optional = true }
 hostname = { version = "0.3.1", optional = true }
 hex = { version = "0.4.3", optional = true }
 num-format = { version = "0.4.0", optional = true }
 serde-value = { version = "0.7.0", optional = true }
-atty = { version = "0.2", optional = true }
+is-terminal = { version = "0.4.17", optional = true }
 nix = { version = "0.25.0", optional = true }
 ipnetwork = { version = "0.20.0", optional = true }
 triggered = { version = "0.1.2", optional = true }
-async-io = "1.8.0"
+async-io = "2.6.0"
 parking_lot = { version = "0.12.1", optional = true }
 console-subscriber = { version = "0.1.7", optional = true }
 uuid = { version = "1.3.0", features = ["serde", "v4"], optional = true }
-sqlx = { version = "0.6", features = ["postgres", "runtime-tokio-rustls"], optional = true }
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls"], optional = true }
 futures = { version = "0.3.26", optional = true }
 regex = { version = "1.8.1", optional = true }
 tokio-task-pool = { version = "0.1.3", optional = true }
 parking_lot_rt = { version = "0.12.1", optional = true }
 mimalloc = { version = "0.1.46", optional = true }
-rtsc = { version =  "0.3.15", optional = true, features = ["parking_lot"] }
+rtsc = { version =  "0.4.2", optional = true, features = ["parking_lot"] }
 oneshot = "0.1.11"
 
 [features]
 server = ["dep:log", "dep:syslog", "dep:chrono", "dep:colored",
-  "dep:clap", "dep:lazy_static", "dep:mimalloc", "dep:fork", "broker"]
+  "dep:clap", "dep:lazy_static", "dep:mimalloc", "dep:fork", "broker-rpc"]
 broker = ["dep:log", "submap/digest", "dep:async-trait", "dep:unix-named-pipe", "dep:nix",
   "dep:ipnetwork", "dep:triggered", "dep:parking_lot", "dep:tokio"]
+broker-rpc = ["broker", "rpc", "dep:rmp-serde"]
 ipc = ["dep:log", "dep:async-trait", "dep:parking_lot", "dep:tokio"]
 ipc-sync = ["dep:log", "dep:parking_lot", "dep:rtsc"]
-rpc = ["dep:log", "dep:serde", "dep:rmp-serde", "dep:async-trait", "dep:serde-value", "dep:parking_lot",
+rpc = ["dep:log", "dep:serde", "dep:async-trait", "dep:serde-value", "dep:parking_lot",
   "dep:regex", "dep:tokio-task-pool", "dep:tokio"]
-rpc-sync = ["dep:rtsc", "dep:rmp-serde", "dep:parking_lot", "dep:log", "dep:regex"]
+rpc-sync = ["dep:rtsc", "dep:parking_lot", "dep:log", "dep:regex"]
 cli = ["ipc", "rpc", "dep:colored", "dep:clap", "dep:env_logger",
   "dep:bma-benchmark", "dep:prettytable-rs", "dep:hostname", "dep:hex",
-  "dep:num-format", "dep:mimalloc", "dep:serde_json", "dep:atty"]
+  "dep:num-format", "dep:mimalloc", "dep:serde_json", "dep:is-terminal", "dep:rmp-serde"]
 openssl-vendored = []
-full = ["rpc", "ipc", "broker", "ipc-sync"]
+full = ["rpc", "ipc", "broker", "broker-rpc", "ipc-sync"]
 cursors = ["rpc", "dep:uuid"]
 std-alloc = []
 tracing = ["tokio/tracing", "dep:console-subscriber"]
@@ -106,7 +107,7 @@ required-features = ["broker", "rpc"]
 
 [[example]]
 name = "client_rpc_handler"
-required-features = ["ipc", "rpc"]
+required-features = ["ipc", "rpc", "broker-rpc"]
 
 [[example]]
 name = "client_rpc"

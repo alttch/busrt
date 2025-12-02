@@ -1,10 +1,10 @@
 use crate::borrow::Cow;
 use crate::client::AsyncClient;
 use crate::comm::{Flush, TtlBufWriter};
-#[cfg(feature = "rpc")]
+#[cfg(feature = "broker-rpc")]
 use crate::common::now_ns;
 use crate::common::{BrokerInfo, BrokerStats};
-#[cfg(feature = "rpc")]
+#[cfg(feature = "broker-rpc")]
 use crate::common::{ClientInfo, ClientList};
 use crate::SECONDARY_SEP;
 use crate::{Error, ErrorKind, GREETINGS, PROTOCOL_VERSION};
@@ -19,7 +19,7 @@ use log::{debug, error, trace, warn};
 use parking_lot::Mutex as SyncMutex;
 #[cfg(feature = "rt")]
 use parking_lot_rt::Mutex as SyncMutex;
-#[cfg(feature = "rpc")]
+#[cfg(feature = "broker-rpc")]
 use serde::{Deserialize, Serialize};
 use std::collections::{hash_map, HashMap, HashSet};
 use std::fmt;
@@ -41,7 +41,9 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 #[cfg(feature = "rpc")]
-use crate::rpc::{Rpc, RpcClient, RpcError, RpcEvent, RpcHandlers, RpcResult};
+use crate::rpc::RpcClient;
+#[cfg(feature = "broker-rpc")]
+use crate::rpc::{Rpc, RpcError, RpcEvent, RpcHandlers, RpcResult};
 
 pub const DEFAULT_QUEUE_SIZE: usize = 8192;
 
@@ -605,15 +607,15 @@ impl PartialOrd for BusRtClient {
 
 impl Eq for BusRtClient {}
 
-#[cfg_attr(feature = "rpc", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "broker-rpc", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone)]
 #[allow(clippy::module_name_repetitions)]
 pub struct BrokerEvent<'a> {
     s: &'a str,
-    #[cfg_attr(feature = "rpc", serde(skip_serializing_if = "Option::is_none"))]
+    #[cfg_attr(feature = "broker-rpc", serde(skip_serializing_if = "Option::is_none"))]
     d: Option<&'a str>,
     t: u64,
-    #[cfg_attr(feature = "rpc", serde(skip))]
+    #[cfg_attr(feature = "broker-rpc", serde(skip))]
     topic: &'a str,
 }
 
@@ -705,7 +707,7 @@ impl BrokerDb {
             w_bytes: self.w_bytes.load(atomic::Ordering::Relaxed),
         }
     }
-    #[cfg(feature = "rpc")]
+    #[cfg(feature = "broker-rpc")]
     #[inline]
     async fn announce(&self, mut event: BrokerEvent<'_>) -> Result<(), Error> {
         if let Some(rpc_client) = self.rpc_client.lock().await.as_ref() {
@@ -728,11 +730,11 @@ impl BrokerDb {
     async fn register_client(&self, client: Arc<BusRtClient>) -> Result<(), Error> {
         // copy name for the announce
         let name = client.name.clone();
-        #[cfg(feature = "rpc")]
+        #[cfg(feature = "broker-rpc")]
         let primary = client.primary;
-        #[cfg(feature = "rpc")]
+        #[cfg(feature = "broker-rpc")]
         let allow_force = client.primary && self.force_register;
-        #[cfg(not(feature = "rpc"))]
+        #[cfg(not(feature = "broker-rpc"))]
         let allow_force = self.force_register;
         match self.insert_client(client.clone()) {
             Ok(()) => {}
@@ -747,7 +749,7 @@ impl BrokerDb {
             }
             Err(e) => return Err(e),
         }
-        #[cfg(feature = "rpc")]
+        #[cfg(feature = "broker-rpc")]
         if primary {
             if let Err(e) = self.announce(BrokerEvent::reg(&name)).await {
                 error!("{}", e);
@@ -805,10 +807,10 @@ impl BrokerDb {
     #[allow(clippy::unused_async)]
     #[inline]
     async fn unregister_client(&self, client: &Arc<BusRtClient>) {
-        #[cfg(feature = "rpc")]
+        #[cfg(feature = "broker-rpc")]
         let was_registered = client.registered.load(atomic::Ordering::Relaxed);
         self.drop_client(client);
-        #[cfg(feature = "rpc")]
+        #[cfg(feature = "broker-rpc")]
         if client.primary && was_registered {
             if let Err(e) = self.announce(BrokerEvent::unreg(&client.name)).await {
                 error!("{}", e);
@@ -1055,15 +1057,15 @@ pub struct Broker {
     async_allocator: Option<Arc<dyn AsyncAllocator + Send + Sync + 'static>>,
 }
 
-#[cfg(feature = "rpc")]
+#[cfg(feature = "broker-rpc")]
 struct BrokerRpcHandlers {
     db: Arc<BrokerDb>,
 }
 
-#[cfg(feature = "rpc")]
+#[cfg(feature = "broker-rpc")]
 const RPC_OK: [u8; 5] = [129, 162, 111, 107, 195];
 
-#[cfg(feature = "rpc")]
+#[cfg(feature = "broker-rpc")]
 #[async_trait]
 impl RpcHandlers for BrokerRpcHandlers {
     async fn handle_call(&self, event: RpcEvent) -> RpcResult {
@@ -1099,7 +1101,7 @@ impl RpcHandlers for BrokerRpcHandlers {
     async fn handle_frame(&self, _frame: Frame) {}
 }
 
-#[cfg(feature = "rpc")]
+#[cfg(feature = "broker-rpc")]
 impl BrokerRpcHandlers {
     fn client_list(&self, payload: &[u8]) -> RpcResult {
         #[derive(Deserialize)]
@@ -1363,7 +1365,7 @@ impl Broker {
             version: crate::VERSION,
         }
     }
-    #[cfg(feature = "rpc")]
+    #[cfg(feature = "broker-rpc")]
     pub async fn init_default_core_rpc(&self) -> Result<(), Error> {
         let client = self.register_client(BROKER_NAME).await?;
         let handlers = BrokerRpcHandlers {
@@ -1382,12 +1384,12 @@ impl Broker {
     pub async fn set_core_rpc_client(&self, client: RpcClient) {
         self.db.rpc_client.lock().await.replace(client);
     }
-    #[cfg(feature = "rpc")]
+    #[cfg(feature = "broker-rpc")]
     #[inline]
     pub fn core_rpc_client(&self) -> Arc<Mutex<Option<RpcClient>>> {
         self.db.rpc_client.clone()
     }
-    #[cfg(feature = "rpc")]
+    #[cfg(feature = "broker-rpc")]
     /// Publish announce for clients
     pub async fn announce(&self, event: BrokerEvent<'_>) -> Result<(), Error> {
         self.db.announce(event).await
@@ -1511,7 +1513,7 @@ impl Broker {
     /// echo TARGET :method param=value param=value # RPC call, the payload will be sent as msgpack
     ///
     /// Requires rpc feature + broker core rpc client to be set
-    #[cfg(feature = "rpc")]
+    #[cfg(feature = "broker-rpc")]
     pub async fn spawn_fifo(&mut self, path: &str, buf_size: usize) -> Result<(), Error> {
         let rpc_client = self.db.rpc_client.clone();
         if rpc_client.lock().await.is_none() {
@@ -1548,7 +1550,7 @@ impl Broker {
         self.services.push(service);
         Ok(())
     }
-    #[cfg(feature = "rpc")]
+    #[cfg(feature = "broker-rpc")]
     async fn send_fifo_cmd(
         rpc_c: &Arc<Mutex<Option<RpcClient>>>,
         line: String,
