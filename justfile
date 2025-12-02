@@ -15,5 +15,5 @@ test:
 	clippy --features rt
 
 tag:
-	git tag -a v${VERSION} -m v${VERSION}
+	git tag -a v{{VERSION}} -m v{{VERSION}}
 	git push origin --tags
