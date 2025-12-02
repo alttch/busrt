@@ -849,6 +849,7 @@ pub struct ServerConfig {
     buf_size: usize,
     buf_ttl: Duration,
     timeout: Duration,
+    payload_size_limit: Option<u32>,
     aaa_map: Option<AaaMap>,
 }
 
@@ -858,6 +859,7 @@ impl Default for ServerConfig {
             buf_size: crate::DEFAULT_BUF_SIZE,
             buf_ttl: crate::DEFAULT_BUF_TTL,
             timeout: crate::DEFAULT_TIMEOUT,
+            payload_size_limit: None,
             aaa_map: None,
         }
     }
@@ -886,6 +888,11 @@ impl ServerConfig {
     #[inline]
     pub fn aaa_map(mut self, aaa_map: AaaMap) -> Self {
         self.aaa_map.replace(aaa_map);
+        self
+    }
+    #[inline]
+    pub fn payload_size_limit(mut self, size: u32) -> Self {
+        self.payload_size_limit = Some(size);
         self
     }
 }
@@ -1164,6 +1171,50 @@ fn prepare_unix_source(_addr: &tokio::net::unix::SocketAddr) -> Option<String> {
     None
 }
 
+#[allow(clippy::too_many_arguments)]
+fn handle_connection(
+    db: Arc<BrokerDb>,
+    reader: impl AsyncReadExt + Unpin + Send + Sync + 'static,
+    writer: impl AsyncWriteExt + Unpin + Send + Sync + 'static,
+    socket_path: String,
+    ip: ClientIp,
+    config: ServerConfig,
+    queue_size: usize,
+    direct_alloc_limit: Option<usize>,
+    kind: BusRtClientKind,
+    client_source: Option<String>,
+    async_allocator: Option<Arc<dyn AsyncAllocator + Send + Sync + 'static>>,
+) {
+    let reader = BufReader::with_capacity(config.buf_size, reader);
+    let writer = TtlBufWriter::new(writer, config.buf_size, config.buf_ttl, config.timeout);
+    let cdb = db.clone();
+    let name = socket_path.clone();
+    let client_path = socket_path.clone();
+    let aaa_map = config.aaa_map.clone();
+    let async_allocator = async_allocator.clone();
+    tokio::spawn(async move {
+        if let Err(e) = Broker::handle_peer(PeerHandlerParams {
+            db: cdb,
+            reader,
+            writer,
+            timeout: config.timeout,
+            payload_size_limit: config.payload_size_limit,
+            aaa_map,
+            ip,
+            queue_size,
+            kind,
+            source: client_source,
+            source_port: Some(client_path),
+            direct_alloc_limit,
+            async_allocator,
+        })
+        .await
+        {
+            pretty_error!(name, e);
+        }
+    });
+}
+
 macro_rules! spawn_server {
     ($self: expr, $path: expr, $listener: expr, $config: expr,
      $kind: expr, $prepare: ident, $prepare_source: ident) => {{
@@ -1182,39 +1233,20 @@ macro_rules! spawn_server {
                             continue;
                         }
                         let (reader, writer) = stream.into_split();
-                        let reader = BufReader::with_capacity($config.buf_size, reader);
-                        let writer = TtlBufWriter::new(
-                            writer,
-                            $config.buf_size,
-                            $config.buf_ttl,
-                            $config.timeout,
-                        );
-                        let cdb = db.clone();
-                        let name = socket_path.clone();
                         let client_source = $prepare_source(&addr);
-                        let client_path = socket_path.clone();
-                        let aaa_map = $config.aaa_map.clone();
-                        let async_allocator = async_allocator.clone();
-                        tokio::spawn(async move {
-                            if let Err(e) = Self::handle_peer(PeerHandlerParams {
-                                db: cdb,
-                                reader,
-                                writer,
-                                timeout: $config.timeout,
-                                aaa_map,
-                                ip: addr.into(),
-                                queue_size,
-                                kind: $kind,
-                                source: client_source,
-                                source_port: Some(client_path),
-                                direct_alloc_limit,
-                                async_allocator,
-                            })
-                            .await
-                            {
-                                pretty_error!(name, e);
-                            }
-                        });
+                        handle_connection(
+                            db.clone(),
+                            reader,
+                            writer,
+                            socket_path.clone(),
+                            addr.into(),
+                            $config.clone(),
+                            queue_size,
+                            direct_alloc_limit,
+                            $kind,
+                            client_source,
+                            async_allocator.clone(),
+                        );
                     }
                     Err(e) => error!("{}", e),
                 }
@@ -1233,6 +1265,7 @@ where
     reader: R,
     writer: TtlBufWriter<W>,
     timeout: Duration,
+    payload_size_limit: Option<u32>,
     aaa_map: Option<AaaMap>,
     ip: ClientIp,
     queue_size: usize,
@@ -1445,6 +1478,30 @@ impl Broker {
         );
         Ok(())
     }
+    #[cfg(not(target_os = "windows"))]
+    pub fn spawn_server_connection(
+        &mut self,
+        stream: UnixStream,
+        config: ServerConfig,
+    ) -> Result<(), Error> {
+        trace!("bus/rt server connection spawned");
+        prepare_unix_stream(&stream)?;
+        let (reader, writer) = stream.into_split();
+        handle_connection(
+            self.db.clone(),
+            reader,
+            writer,
+            String::new(),
+            ClientIp::No,
+            config.clone(),
+            self.queue_size,
+            self.direct_alloc_limit,
+            BusRtClientKind::LocalIpc,
+            None,
+            self.async_allocator.clone(),
+        );
+        Ok(())
+    }
     #[allow(clippy::items_after_statements)]
     /// Broker fifo channel is useful for shell scripts and allows to send:
     ///
@@ -1652,6 +1709,7 @@ impl Broker {
             client.clone(),
             &mut reader,
             timeout,
+            params.payload_size_limit,
             aaa,
             params.direct_alloc_limit,
             params.async_allocator.as_ref(),
@@ -1716,12 +1774,13 @@ impl Broker {
     }
 
     // TODO send ack only after the client received message (QoS2)
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
     async fn handle_reader<R>(
         db: &BrokerDb,
         client: Arc<BusRtClient>,
         reader: &mut R,
         timeout: Duration,
+        payload_size_limit: Option<u32>,
         aaa: Option<ClientAaa>,
         direct_alloc_limit: Option<usize>,
         async_allocator: Option<&Arc<dyn AsyncAllocator + Send + Sync + 'static>>,
@@ -1748,6 +1807,14 @@ impl Broker {
             let op: FrameOp = (flags & 0b0011_1111).try_into()?;
             let qos: QoS = (flags >> 6 & 0b0011_1111).try_into()?;
             let len = u32::from_le_bytes(header_buf[5..9].try_into().unwrap());
+            if let Some(limit) = payload_size_limit {
+                if len > limit {
+                    return Err(Error::data(format!(
+                        "Payload size {} exceeds the limit of {} bytes",
+                        len, limit
+                    )));
+                }
+            }
             let mut buf: Vec<u8> = if let Some(limit) = direct_alloc_limit {
                 if len as usize > limit {
                     async_allocator

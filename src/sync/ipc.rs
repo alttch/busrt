@@ -210,9 +210,15 @@ impl Client {
     /// Creates a new client instance. The Reader must be started manually by calling
     /// `Reader::run()` (e.g. in a separate thread).
     pub fn connect(config: &Config) -> Result<(Self, Reader), Error> {
-        Self::connect_broker(config)
+        Self::connect_broker(config, None)
     }
-    fn connect_broker(config: &Config) -> Result<(Self, Reader), Error> {
+    pub fn connect_stream(stream: UnixStream, config: &Config) -> Result<(Self, Reader), Error> {
+        Self::connect_broker(config, Some(stream))
+    }
+    fn connect_broker(
+        config: &Config,
+        stream: Option<UnixStream>,
+    ) -> Result<(Self, Reader), Error> {
         let responses: ResponseMap = <_>::default();
         let connected = Arc::new(atomic::AtomicBool::new(true));
         #[allow(clippy::case_sensitive_file_extension_comparisons)]
@@ -227,7 +233,11 @@ impl Client {
             }
             #[cfg(not(target_os = "windows"))]
             {
-                let mut stream = UnixStream::connect(&config.path)?;
+                let mut stream = if let Some(s) = stream {
+                    s
+                } else {
+                    UnixStream::connect(&config.path)?
+                };
                 stream.set_write_timeout(Some(config.timeout))?;
                 let r = stream.try_clone()?;
                 let reader = BufReader::with_capacity(config.buf_size, r);
