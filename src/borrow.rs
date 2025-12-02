@@ -40,7 +40,7 @@ impl<'a> From<&'a [u8]> for Cow<'a> {
     }
 }
 
-impl<'a> Cow<'a> {
+impl Cow<'_> {
     #[inline]
     pub fn as_slice(&self) -> &[u8] {
         match self {

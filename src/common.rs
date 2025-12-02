@@ -21,12 +21,12 @@ pub struct ClientInfo<'a> {
     pub queue: usize,
     pub instances: usize,
 }
-impl<'a> Ord for ClientInfo<'a> {
+impl Ord for ClientInfo<'_> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.name.cmp(other.name)
     }
 }
-impl<'a> PartialOrd for ClientInfo<'a> {
+impl PartialOrd for ClientInfo<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }

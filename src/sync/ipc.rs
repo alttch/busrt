@@ -197,7 +197,7 @@ macro_rules! connect_broker {
         (
             rx,
             Reader {
-                reader: Box::new($reader),
+                inner: Box::new($reader),
                 tx,
                 responses: reader_responses,
                 rconn,
@@ -556,7 +556,7 @@ where
 }
 
 pub struct Reader {
-    reader: Box<dyn Read + Send>,
+    inner: Box<dyn Read + Send>,
     tx: SyncEventSender,
     responses: ResponseMap,
     rconn: Arc<atomic::AtomicBool>,
@@ -564,7 +564,7 @@ pub struct Reader {
 
 impl Reader {
     pub fn run(self) {
-        if let Err(e) = handle_read(self.reader, self.tx, self.responses) {
+        if let Err(e) = handle_read(self.inner, self.tx, self.responses) {
             error!("busrt client reader error: {}", e);
             self.rconn.store(false, atomic::Ordering::Relaxed);
         }

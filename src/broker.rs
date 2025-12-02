@@ -247,7 +247,7 @@ macro_rules! publish {
 
 pub struct Client {
     name: String,
-    client: Arc<BusRtClient>,
+    bus: Arc<BusRtClient>,
     db: Arc<BrokerDb>,
     rx: Option<EventChannel>,
     secondary_counter: atomic::AtomicUsize,
@@ -259,7 +259,7 @@ impl AsyncClient for Client {
     ///
     /// Will panic if the mutex is poisoned
     async fn subscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
-        if self.db.subscriptions.lock().subscribe(topic, &self.client) {
+        if self.db.subscriptions.lock().subscribe(topic, &self.bus) {
             make_confirm_channel!(qos)
         } else {
             Err(Error::not_registered())
@@ -271,7 +271,7 @@ impl AsyncClient for Client {
     async fn subscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
         let mut db = self.db.subscriptions.lock();
         for topic in topics {
-            if !db.subscribe(topic, &self.client) {
+            if !db.subscribe(topic, &self.bus) {
                 return Err(Error::not_registered());
             }
         }
@@ -281,12 +281,7 @@ impl AsyncClient for Client {
     ///
     /// Will panic if the mutex is poisoned
     async fn unsubscribe(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
-        if self
-            .db
-            .subscriptions
-            .lock()
-            .unsubscribe(topic, &self.client)
-        {
+        if self.db.subscriptions.lock().unsubscribe(topic, &self.bus) {
             make_confirm_channel!(qos)
         } else {
             Err(Error::not_registered())
@@ -298,25 +293,25 @@ impl AsyncClient for Client {
     async fn unsubscribe_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
         let mut db = self.db.subscriptions.lock();
         for topic in topics {
-            if !db.unsubscribe(topic, &self.client) {
+            if !db.unsubscribe(topic, &self.bus) {
                 return Err(Error::not_registered());
             }
         }
         make_confirm_channel!(qos)
     }
     async fn exclude(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
-        self.client
+        self.bus
             .has_exclusions
             .store(true, atomic::Ordering::Release);
-        self.client.exclusions.lock().insert(topic);
+        self.bus.exclusions.lock().insert(topic);
         make_confirm_channel!(qos)
     }
     /// unexclude a topic (include back but not subscribe)
     async fn unexclude(&mut self, topic: &str, qos: QoS) -> Result<OpConfirm, Error> {
-        let mut exclusions = self.client.exclusions.lock();
+        let mut exclusions = self.bus.exclusions.lock();
         exclusions.remove(topic);
         if exclusions.is_empty() {
-            self.client
+            self.bus
                 .has_exclusions
                 .store(false, atomic::Ordering::Release);
         }
@@ -324,9 +319,9 @@ impl AsyncClient for Client {
     }
     /// exclude multiple topics
     async fn exclude_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
-        let mut exclusions = self.client.exclusions.lock();
+        let mut exclusions = self.bus.exclusions.lock();
         if !topics.is_empty() {
-            self.client
+            self.bus
                 .has_exclusions
                 .store(true, atomic::Ordering::Release);
         }
@@ -337,12 +332,12 @@ impl AsyncClient for Client {
     }
     /// unexclude multiple topics (include back but not subscribe)
     async fn unexclude_bulk(&mut self, topics: &[&str], qos: QoS) -> Result<OpConfirm, Error> {
-        let mut exclusions = self.client.exclusions.lock();
+        let mut exclusions = self.bus.exclusions.lock();
         for topic in topics {
             exclusions.remove(topic);
         }
         if exclusions.is_empty() {
-            self.client
+            self.bus
                 .has_exclusions
                 .store(false, atomic::Ordering::Release);
         }
@@ -358,7 +353,7 @@ impl AsyncClient for Client {
         let len = payload.len() as u64;
         send!(
             self.db,
-            self.client,
+            self.bus,
             target,
             None,
             payload.to_vec(),
@@ -380,7 +375,7 @@ impl AsyncClient for Client {
         let len = (payload.len() + header.len()) as u64;
         send!(
             self.db,
-            self.client,
+            self.bus,
             target,
             Some(header.to_vec()),
             payload.to_vec(),
@@ -401,7 +396,7 @@ impl AsyncClient for Client {
         let len = payload.len() as u64;
         send_broadcast!(
             self.db,
-            self.client,
+            self.bus,
             target,
             None,
             payload.to_vec(),
@@ -422,7 +417,7 @@ impl AsyncClient for Client {
         let len = payload.len() as u64;
         publish!(
             self.db,
-            self.client,
+            self.bus,
             topic,
             None,
             payload.to_vec(),
@@ -444,7 +439,7 @@ impl AsyncClient for Client {
         let len = payload.len() as u64;
         publish!(
             self.db,
-            self.client,
+            self.bus,
             topic,
             receiver,
             None,
@@ -487,16 +482,14 @@ impl Client {
     /// announce is sent. It is better to manually call "unregister" method before.
     #[inline]
     pub async fn unregister(&self) {
-        self.client
-            .registered
-            .store(false, atomic::Ordering::SeqCst);
-        self.db.unregister_client(&self.client).await;
+        self.bus.registered.store(false, atomic::Ordering::SeqCst);
+        self.db.unregister_client(&self.bus).await;
     }
 }
 
 impl Drop for Client {
     fn drop(&mut self) {
-        self.db.drop_client(&self.client);
+        self.db.drop_client(&self.bus);
     }
 }
 
@@ -1410,7 +1403,7 @@ impl Broker {
         self.db.register_client(client.clone()).await?;
         Ok(Client {
             name: name.to_owned(),
-            client,
+            bus: client,
             db: self.db.clone(),
             rx: Some(rx),
             secondary_counter: atomic::AtomicUsize::new(0),
@@ -1420,11 +1413,11 @@ impl Broker {
     ///
     /// Will panic if the client's secondaries mutex is poisoned
     pub async fn register_secondary_for(&self, client: &Client) -> Result<Client, Error> {
-        if client.client.primary {
+        if client.bus.primary {
             let secondary_id = client
                 .secondary_counter
                 .fetch_add(1, atomic::Ordering::Relaxed);
-            let secondary_name = format!("{}{}{}", client.client.name, SECONDARY_SEP, secondary_id);
+            let secondary_name = format!("{}{}{}", client.bus.name, SECONDARY_SEP, secondary_id);
             self.register_client(&secondary_name).await
         } else {
             Err(Error::not_supported("not a primary client"))
@@ -1432,7 +1425,7 @@ impl Broker {
     }
     #[inline]
     pub async fn unregister_client(&self, client: &Client) {
-        self.db.unregister_client(&client.client).await;
+        self.db.unregister_client(&client.bus).await;
     }
     #[inline]
     /// Force disconnect a client
@@ -1880,9 +1873,6 @@ impl Broker {
                             topics.push(topic);
                         } else if qos.needs_ack() {
                             send_ack!(ERR_ACCESS, qos.is_realtime());
-                            continue;
-                        } else {
-                            continue;
                         }
                     }
                     {
@@ -2142,7 +2132,7 @@ impl Broker {
                 if let Some(t) = topic.as_ref() {
                     buf.extend_from_slice(t);
                     buf.push(0x00);
-                };
+                }
                 write_data!(&buf, Flush::No);
                 if let Some(header) = frame.header() {
                     write_data!(header, Flush::No);

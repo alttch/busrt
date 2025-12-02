@@ -421,7 +421,7 @@ impl Rpc for RpcClient {
     fn is_connected(&self) -> bool {
         self.connected
             .as_ref()
-            .map_or(true, |b| b.load(atomic::Ordering::Relaxed))
+            .is_none_or(|b| b.load(atomic::Ordering::Relaxed))
     }
 }
 
