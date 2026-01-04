@@ -62,7 +62,7 @@ ws_stream_tungstenite = { version = "0.15.0", features = ["tokio"], optional = t
 async-tungstenite = { version = "0.29", features = ["tokio", "tokio-rustls-native-certs"], optional = true }
 tokio-util = { version = "0.7.18", features = ["futures-util", "compat"], optional = true }
 tokio-rustls = { version = "0.26.4", optional = true }
-tungstenite = { version = "0.26", optional = true }
+tungstenite = { version = "0.26", features = ["rustls-native-certs"], optional = true }
 
 [features]
 server = ["dep:log", "dep:syslog", "dep:chrono", "dep:colored",
@@ -75,7 +75,7 @@ broker-rpc = ["broker", "rpc", "dep:rmp-serde"]
 ipc = ["dep:log", "dep:async-trait", "dep:parking_lot", "dep:tokio",
   "dep:rustls", "dep:futures-util", "dep:ws_stream_tungstenite",
   "dep:async-tungstenite", "dep:tokio-util", "dep:tokio-rustls", "dep:tungstenite"]
-ipc-sync = ["dep:log", "dep:parking_lot", "dep:rtsc"]
+ipc-sync = ["dep:log", "dep:parking_lot", "dep:rtsc", "dep:tungstenite"]
 rpc = ["dep:log", "dep:serde", "dep:async-trait", "dep:serde-value", "dep:parking_lot",
   "dep:regex", "dep:tokio-task-pool", "dep:tokio"]
 rpc-sync = ["dep:rtsc", "dep:parking_lot", "dep:log", "dep:regex"]

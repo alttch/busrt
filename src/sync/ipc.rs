@@ -39,6 +39,7 @@ pub struct Config {
     buf_size: usize,
     queue_size: usize,
     timeout: Duration,
+    token: Option<String>,
 }
 
 impl Config {
@@ -51,6 +52,7 @@ impl Config {
             buf_size: crate::DEFAULT_BUF_SIZE,
             queue_size: crate::DEFAULT_QUEUE_SIZE,
             timeout: crate::DEFAULT_TIMEOUT,
+            token: None,
         }
     }
     pub fn buf_size(mut self, size: usize) -> Self {
@@ -63,6 +65,11 @@ impl Config {
     }
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+    /// Bearer token for authorization header if required
+    pub fn token<S: AsRef<str>>(mut self, token: S) -> Self {
+        self.token = Some(token.as_ref().to_owned());
         self
     }
 }
@@ -222,23 +229,47 @@ impl Client {
         let responses: ResponseMap = <_>::default();
         let connected = Arc::new(atomic::AtomicBool::new(true));
         #[allow(clippy::case_sensitive_file_extension_comparisons)]
-        let (writer, rx, reader) = if config.path.ends_with(".sock")
-            || config.path.ends_with(".socket")
-            || config.path.ends_with(".ipc")
-            || config.path.starts_with('/')
-        {
-            #[cfg(target_os = "windows")]
+        let (writer, rx, reader) =
+            if config.path.starts_with("ws://") || config.path.starts_with("wss://") {
+                unimplemented!("WebSocket transport for sync client is not implemented yet");
+            } else if config.path.ends_with(".sock")
+                || config.path.ends_with(".socket")
+                || config.path.ends_with(".ipc")
+                || config.path.starts_with('/')
             {
-                return Err(Error::not_supported("unix sockets"));
-            }
-            #[cfg(not(target_os = "windows"))]
-            {
-                let mut stream = if let Some(s) = stream {
-                    s
-                } else {
-                    UnixStream::connect(&config.path)?
-                };
+                #[cfg(target_os = "windows")]
+                {
+                    return Err(Error::not_supported("unix sockets"));
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let mut stream = if let Some(s) = stream {
+                        s
+                    } else {
+                        UnixStream::connect(&config.path)?
+                    };
+                    stream.set_write_timeout(Some(config.timeout))?;
+                    let r = stream.try_clone()?;
+                    let reader = BufReader::with_capacity(config.buf_size, r);
+                    let (rx, reader) = connect_broker!(
+                        &config.name,
+                        stream,
+                        reader,
+                        responses,
+                        connected,
+                        config.timeout,
+                        config.queue_size
+                    );
+                    (
+                        Box::new(stream) as Box<dyn Socket + Send + 'static>,
+                        rx,
+                        reader,
+                    )
+                }
+            } else {
+                let mut stream = TcpStream::connect(&config.path)?;
                 stream.set_write_timeout(Some(config.timeout))?;
+                stream.set_nodelay(true)?;
                 let r = stream.try_clone()?;
                 let reader = BufReader::with_capacity(config.buf_size, r);
                 let (rx, reader) = connect_broker!(
@@ -255,28 +286,7 @@ impl Client {
                     rx,
                     reader,
                 )
-            }
-        } else {
-            let mut stream = TcpStream::connect(&config.path)?;
-            stream.set_write_timeout(Some(config.timeout))?;
-            stream.set_nodelay(true)?;
-            let r = stream.try_clone()?;
-            let reader = BufReader::with_capacity(config.buf_size, r);
-            let (rx, reader) = connect_broker!(
-                &config.name,
-                stream,
-                reader,
-                responses,
-                connected,
-                config.timeout,
-                config.queue_size
-            );
-            (
-                Box::new(stream) as Box<dyn Socket + Send + 'static>,
-                rx,
-                reader,
-            )
-        };
+            };
         Ok((
             Self {
                 name: config.name.clone(),

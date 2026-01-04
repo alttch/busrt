@@ -3361,6 +3361,7 @@ dependencies = [
  "log",
  "rand 0.9.2",
  "rustls",
+ "rustls-native-certs",
  "rustls-pki-types",
  "sha1",
  "thiserror 2.0.17",

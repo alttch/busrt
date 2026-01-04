@@ -1,15 +1,15 @@
-use crate::Error;
-use crate::EventChannel;
-use crate::GREETINGS;
-use crate::IntoBusRtResult;
-use crate::OpConfirm;
-use crate::PING_FRAME;
-use crate::PROTOCOL_VERSION;
-use crate::QoS;
-use crate::RESPONSE_OK;
-use crate::SECONDARY_SEP;
 use crate::borrow::Cow;
 use crate::comm::{Flush, TtlBufWriter};
+use crate::Error;
+use crate::EventChannel;
+use crate::IntoBusRtResult;
+use crate::OpConfirm;
+use crate::QoS;
+use crate::GREETINGS;
+use crate::PING_FRAME;
+use crate::PROTOCOL_VERSION;
+use crate::RESPONSE_OK;
+use crate::SECONDARY_SEP;
 use crate::{Frame, FrameData, FrameKind, FrameOp};
 use async_tungstenite::tokio::TokioAdapter;
 use futures_util::AsyncReadExt as _;
@@ -19,15 +19,15 @@ use parking_lot::Mutex;
 use parking_lot_rt::Mutex;
 use std::collections::BTreeMap;
 use std::marker::Unpin;
-use std::sync::Arc;
 use std::sync::atomic;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 #[cfg(not(target_os = "windows"))]
-use tokio::net::UnixStream;
-#[cfg(not(target_os = "windows"))]
 use tokio::net::unix;
-use tokio::net::{TcpStream, tcp};
+#[cfg(not(target_os = "windows"))]
+use tokio::net::UnixStream;
+use tokio::net::{tcp, TcpStream};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio_util::compat::FuturesAsyncReadCompatExt as _;
