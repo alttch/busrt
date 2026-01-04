@@ -136,6 +136,8 @@ struct Opts {
     queue_size: usize,
     #[clap(long = "timeout", default_value = "5")]
     timeout: f32,
+    #[clap(long, help = "Bearer token for authentication")]
+    token: Option<String>,
     #[clap(short = 'v', long = "verbose")]
     verbose: bool,
     #[clap(short = 's', long = "silent", help = "suppress logging")]
@@ -364,10 +366,13 @@ async fn get_payload(candidate: &Option<String>) -> Vec<u8> {
 }
 
 async fn create_client(opts: &Opts, name: &str) -> Client {
-    let config = Config::new(&opts.path, name)
+    let mut config = Config::new(&opts.path, name)
         .buf_size(opts.buf_size)
         .queue_size(opts.queue_size)
         .timeout(Duration::from_secs_f32(opts.timeout));
+    if let Some(token) = &opts.token {
+        config = config.token(token);
+    }
     Client::connect(&config)
         .await
         .expect("Unable to connect to the busrt broker")

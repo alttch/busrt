@@ -1,33 +1,38 @@
-use crate::borrow::Cow;
-use crate::comm::{Flush, TtlBufWriter};
 use crate::Error;
 use crate::EventChannel;
+use crate::GREETINGS;
 use crate::IntoBusRtResult;
 use crate::OpConfirm;
-use crate::QoS;
-use crate::GREETINGS;
 use crate::PING_FRAME;
 use crate::PROTOCOL_VERSION;
+use crate::QoS;
 use crate::RESPONSE_OK;
 use crate::SECONDARY_SEP;
+use crate::borrow::Cow;
+use crate::comm::{Flush, TtlBufWriter};
 use crate::{Frame, FrameData, FrameKind, FrameOp};
+use async_tungstenite::tokio::TokioAdapter;
+use futures_util::AsyncReadExt as _;
 #[cfg(not(feature = "rt"))]
 use parking_lot::Mutex;
 #[cfg(feature = "rt")]
 use parking_lot_rt::Mutex;
 use std::collections::BTreeMap;
 use std::marker::Unpin;
-use std::sync::atomic;
 use std::sync::Arc;
+use std::sync::atomic;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 #[cfg(not(target_os = "windows"))]
-use tokio::net::unix;
-#[cfg(not(target_os = "windows"))]
 use tokio::net::UnixStream;
-use tokio::net::{tcp, TcpStream};
+#[cfg(not(target_os = "windows"))]
+use tokio::net::unix;
+use tokio::net::{TcpStream, tcp};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
+use tokio_util::compat::FuturesAsyncReadCompatExt as _;
+use tokio_util::compat::FuturesAsyncWriteCompatExt as _;
+use ws_stream_tungstenite::WsStream;
 
 use crate::client::AsyncClient;
 
@@ -41,6 +46,20 @@ enum Writer {
     #[cfg(not(target_os = "windows"))]
     Unix(TtlBufWriter<unix::OwnedWriteHalf>),
     Tcp(TtlBufWriter<tcp::OwnedWriteHalf>),
+    WebSocket(
+        TtlBufWriter<
+            tokio_util::compat::Compat<
+                futures_util::io::WriteHalf<
+                    WsStream<
+                        async_tungstenite::stream::Stream<
+                            TokioAdapter<TcpStream>,
+                            TokioAdapter<tokio_rustls::client::TlsStream<TcpStream>>,
+                        >,
+                    >,
+                >,
+            >,
+        >,
+    ),
 }
 
 impl Writer {
@@ -49,6 +68,7 @@ impl Writer {
             #[cfg(not(target_os = "windows"))]
             Writer::Unix(w) => w.write(buf, flush).await.map_err(Into::into),
             Writer::Tcp(w) => w.write(buf, flush).await.map_err(Into::into),
+            Writer::WebSocket(w) => w.write(buf, flush).await.map_err(Into::into),
         }
     }
 }
@@ -61,6 +81,7 @@ pub struct Config {
     buf_ttl: Duration,
     queue_size: usize,
     timeout: Duration,
+    token: Option<String>,
 }
 
 impl Config {
@@ -74,6 +95,7 @@ impl Config {
             buf_ttl: crate::DEFAULT_BUF_TTL,
             queue_size: crate::DEFAULT_QUEUE_SIZE,
             timeout: crate::DEFAULT_TIMEOUT,
+            token: None,
         }
     }
     pub fn buf_size(mut self, size: usize) -> Self {
@@ -90,6 +112,11 @@ impl Config {
     }
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+    /// Bearer token for authorization header if required
+    pub fn token<S: AsRef<str>>(mut self, token: S) -> Self {
+        self.token = Some(token.as_ref().to_owned());
         self
     }
 }
@@ -234,22 +261,93 @@ impl Client {
         let responses: ResponseMap = <_>::default();
         let connected = Arc::new(atomic::AtomicBool::new(true));
         #[allow(clippy::case_sensitive_file_extension_comparisons)]
-        let (writer, reader_fut, rx) = if config.path.ends_with(".sock")
-            || config.path.ends_with(".socket")
-            || config.path.ends_with(".ipc")
-            || config.path.starts_with('/')
-        {
-            #[cfg(target_os = "windows")]
+        let (writer, reader_fut, rx) =
+            if config.path.starts_with("ws://") || config.path.starts_with("wss://") {
+                let mut ws_config = tungstenite::protocol::WebSocketConfig::default();
+                ws_config.read_buffer_size = config.buf_size;
+                ws_config.write_buffer_size = config.buf_size;
+                ws_config.max_write_buffer_size = config.buf_size * 2;
+                ws_config.max_message_size = Some(usize::try_from(u32::MAX).unwrap());
+                ws_config.max_frame_size = Some(usize::try_from(u32::MAX).unwrap());
+
+                let mut req = tungstenite::client::ClientRequestBuilder::new(
+                    config
+                        .path
+                        .parse::<tungstenite::http::Uri>()
+                        .map_err(Error::io)?,
+                );
+                if let Some(token) = &config.token {
+                    req = req.with_header("Authorization", format!("Bearer {}", token))
+                }
+
+                let (ws_client, _) =
+                    async_tungstenite::tokio::connect_async_with_config(req, Some(ws_config))
+                        .await
+                        .map_err(Error::io)?;
+                let ws = WsStream::new(ws_client);
+                let (r, w) = ws.split();
+                let mut r = r.compat();
+                let mut w = w.compat_write();
+                let (reader_fut, rx) = connect_broker!(
+                    &config.name,
+                    r,
+                    w,
+                    responses,
+                    connected,
+                    config.timeout,
+                    config.queue_size
+                );
+                (
+                    Writer::WebSocket(TtlBufWriter::new(
+                        w,
+                        config.buf_size,
+                        config.buf_ttl,
+                        config.timeout,
+                    )),
+                    reader_fut,
+                    rx,
+                )
+            } else if config.path.ends_with(".sock")
+                || config.path.ends_with(".socket")
+                || config.path.ends_with(".ipc")
+                || config.path.starts_with('/')
             {
-                return Err(Error::not_supported("unix sockets"));
-            }
-            #[cfg(not(target_os = "windows"))]
-            {
-                let stream = if let Some(s) = stream {
-                    s
-                } else {
-                    UnixStream::connect(&config.path).await?
-                };
+                #[cfg(target_os = "windows")]
+                {
+                    return Err(Error::not_supported("unix sockets"));
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let stream = if let Some(s) = stream {
+                        s
+                    } else {
+                        UnixStream::connect(&config.path).await?
+                    };
+                    let (r, mut writer) = stream.into_split();
+                    let mut reader = BufReader::with_capacity(config.buf_size, r);
+                    let (reader_fut, rx) = connect_broker!(
+                        &config.name,
+                        reader,
+                        writer,
+                        responses,
+                        connected,
+                        config.timeout,
+                        config.queue_size
+                    );
+                    (
+                        Writer::Unix(TtlBufWriter::new(
+                            writer,
+                            config.buf_size,
+                            config.buf_ttl,
+                            config.timeout,
+                        )),
+                        reader_fut,
+                        rx,
+                    )
+                }
+            } else {
+                let stream = TcpStream::connect(&config.path).await?;
+                stream.set_nodelay(true)?;
                 let (r, mut writer) = stream.into_split();
                 let mut reader = BufReader::with_capacity(config.buf_size, r);
                 let (reader_fut, rx) = connect_broker!(
@@ -262,7 +360,7 @@ impl Client {
                     config.queue_size
                 );
                 (
-                    Writer::Unix(TtlBufWriter::new(
+                    Writer::Tcp(TtlBufWriter::new(
                         writer,
                         config.buf_size,
                         config.buf_ttl,
@@ -271,32 +369,7 @@ impl Client {
                     reader_fut,
                     rx,
                 )
-            }
-        } else {
-            let stream = TcpStream::connect(&config.path).await?;
-            stream.set_nodelay(true)?;
-            let (r, mut writer) = stream.into_split();
-            let mut reader = BufReader::with_capacity(config.buf_size, r);
-            let (reader_fut, rx) = connect_broker!(
-                &config.name,
-                reader,
-                writer,
-                responses,
-                connected,
-                config.timeout,
-                config.queue_size
-            );
-            (
-                Writer::Tcp(TtlBufWriter::new(
-                    writer,
-                    config.buf_size,
-                    config.buf_ttl,
-                    config.timeout,
-                )),
-                reader_fut,
-                rx,
-            )
-        };
+            };
         Ok(Self {
             name: config.name.clone(),
             writer,

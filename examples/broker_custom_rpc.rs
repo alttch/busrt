@@ -57,6 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     broker
         .spawn_unix_server("/tmp/busrt.sock", ServerConfig::default())
         .await?;
+    broker
+        .spawn_websocket_server("127.0.0.1:3001", ServerConfig::default(), None)
+        .await?;
     // register the broker core client
     let mut core_client = broker.register_client(BROKER_NAME).await?;
     // subscribe the core client to all topics to print publish frames when received
@@ -65,6 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let handlers = MyHandlers {};
     // create RPC
     let crpc = RpcClient::new(core_client, handlers);
+    let c = crpc.client();
     println!("Waiting for frames to {}", BROKER_NAME);
     // set broker client, optional, allows to spawn fifo servers, the client is wrapped in
     // Arc<Mutex<_>> as it is cloned for each fifo spawned and can be got back with core_rpc_client
@@ -81,7 +85,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap()
         .is_connected()
     {
-        sleep(Duration::from_secs(1)).await;
+        c.lock()
+            .await
+            .publish("test", "broker alive".as_bytes().into(), QoS::No)
+            .await?;
+        sleep(Duration::from_millis(100)).await;
     }
     Ok(())
 }
