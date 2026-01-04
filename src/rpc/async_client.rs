@@ -96,7 +96,7 @@ pub trait Rpc {
     ///
     /// This mehtod allows to get the containered-client back, to call its methods directly (manage
     /// pub/sub and send broadcast messages)
-    fn client(&self) -> Arc<Mutex<(dyn AsyncClient + 'static)>>;
+    fn client(&self) -> Arc<Mutex<dyn AsyncClient + 'static>>;
     async fn notify(
         &self,
         target: &str,
@@ -334,7 +334,7 @@ impl RpcClient {
 #[async_trait]
 impl Rpc for RpcClient {
     #[inline]
-    fn client(&self) -> Arc<Mutex<(dyn AsyncClient + 'static)>> {
+    fn client(&self) -> Arc<Mutex<dyn AsyncClient + 'static>> {
         self.client.clone()
     }
     #[inline]

@@ -13,6 +13,7 @@ use crate::{Frame, FrameData, FrameKind, FrameOp, QoS};
 use crate::{ERR_ACCESS, ERR_DATA, ERR_NOT_SUPPORTED};
 use crate::{OP_ACK, RESPONSE_OK};
 use async_trait::async_trait;
+use futures_util::AsyncReadExt as _;
 use ipnetwork::IpNetwork;
 use log::{debug, error, trace, warn};
 #[cfg(not(feature = "rt"))]
@@ -39,6 +40,7 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
+use tokio_util::compat::{FuturesAsyncReadCompatExt as _, FuturesAsyncWriteCompatExt as _};
 
 #[cfg(feature = "rpc")]
 use crate::rpc::RpcClient;
@@ -498,6 +500,7 @@ enum BusRtClientKind {
     Internal,
     LocalIpc,
     Tcp,
+    WebSocket,
 }
 
 impl BusRtClientKind {
@@ -507,6 +510,7 @@ impl BusRtClientKind {
             BusRtClientKind::Internal => "internal",
             BusRtClientKind::LocalIpc => "local_ipc",
             BusRtClientKind::Tcp => "tcp",
+            BusRtClientKind::WebSocket => "websocket",
         }
     }
 }
@@ -1471,6 +1475,102 @@ impl Broker {
             prepare_tcp_stream,
             prepare_tcp_source
         );
+        Ok(())
+    }
+    pub async fn spawn_websocket_server(
+        &mut self,
+        path: &str,
+        config: ServerConfig,
+        tls_config: Option<Arc<rustls::ServerConfig>>,
+    ) -> Result<(), Error> {
+        let socket_path = path.to_owned();
+        let db = self.db.clone();
+        let queue_size = self.queue_size;
+        let direct_alloc_limit = self.direct_alloc_limit;
+        let async_allocator = self.async_allocator.clone();
+        let listener = TcpListener::bind(path).await?;
+        let tls_acceptor = tls_config.map(tokio_rustls::TlsAcceptor::from);
+        let timeout = config.timeout;
+        let ws_proto = if tls_acceptor.is_some() { "wss" } else { "ws" };
+        let service = tokio::spawn(async move {
+            loop {
+                match listener.accept().await {
+                    Ok((stream, addr)) => {
+                        trace!(
+                            "bus/rt client connected from {:?} to {}://{}",
+                            addr,
+                            ws_proto,
+                            socket_path
+                        );
+                        if let Err(e) = prepare_tcp_stream(&stream) {
+                            error!("{}", e);
+                            continue;
+                        }
+                        let db = db.clone();
+                        let config = config.clone();
+                        let socket_path = socket_path.clone();
+                        let async_allocator = async_allocator.clone();
+                        let tls_acceptor = tls_acceptor.clone();
+                        tokio::spawn(async move {
+                            macro_rules! prepare_and_handle {
+                                ($stream: expr) => {
+                                    let (r, w) = match tokio::time::timeout(
+                                        timeout,
+                                        async_tungstenite::tokio::accept_async($stream),
+                                    )
+                                    .await
+                                    {
+                                        Ok(Ok(ws)) => {
+                                            ws_stream_tungstenite::WsStream::new(ws).split()
+                                        }
+                                        Ok(Err(e)) => {
+                                            error!("websocket accept {} error: {}", addr, e);
+                                            return;
+                                        }
+                                        Err(_) => {
+                                            error!("websocket accept {} timeout", addr);
+                                            return;
+                                        }
+                                    };
+                                    handle_connection(
+                                        db,
+                                        r.compat(),
+                                        w.compat_write(),
+                                        socket_path,
+                                        addr.into(),
+                                        config,
+                                        queue_size,
+                                        direct_alloc_limit,
+                                        BusRtClientKind::WebSocket,
+                                        prepare_tcp_source(&addr),
+                                        async_allocator,
+                                    );
+                                };
+                            }
+                            if let Some(tls_acceptor) = tls_acceptor {
+                                match tokio::time::timeout(timeout, tls_acceptor.accept(stream))
+                                    .await
+                                {
+                                    Ok(Ok(tls_stream)) => {
+                                        prepare_and_handle!(tls_stream);
+                                    }
+                                    Ok(Err(e)) => {
+                                        error!("tls accept {} error: {}", addr, e);
+                                    }
+                                    Err(_) => {
+                                        error!("tls accept {} timeout", addr);
+                                    }
+                                }
+                            } else {
+                                prepare_and_handle!(stream);
+                            }
+                        });
+                    }
+                    Err(e) => error!("{}", e),
+                }
+            }
+        });
+        self.services.push(service);
         Ok(())
     }
     #[cfg(not(target_os = "windows"))]

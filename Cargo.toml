@@ -28,7 +28,7 @@ clap = { version = "4.5.53", features = ["derive"], optional = true }
 submap = { version = "0.3", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
 fork = { version = "0.1.18", optional = true }
-rmp-serde = { version = "1.3.0", optional = true }
+rmp-serde = { version = "1.3.1", optional = true }
 serde = { version = "1.0.143", features = ["derive"], optional = true }
 async-trait = { version = "0.1.57", optional = true }
 unix-named-pipe = { version = "0.2.0", optional = true }
@@ -56,12 +56,20 @@ parking_lot_rt = { version = "0.12.1", optional = true }
 mimalloc = { version = "0.1.46", optional = true }
 rtsc = { version =  "0.4.2", optional = true, features = ["parking_lot"] }
 oneshot = "0.1.11"
+rustls = { version = "0.23.35", optional = true }
+futures-util = { version = "0.3.31", features = ["io", "tokio-io"], optional = true }
+ws_stream_tungstenite = { version = "0.15.0", features = ["tokio"], optional = true }
+async-tungstenite = { version = "0.29", features = ["tokio", "tokio-rustls-manual-roots"], optional = true }
+tokio-util = { version = "0.7.18", features = ["futures-util", "compat"], optional = true }
+tokio-rustls = { version = "0.26.4", optional = true }
 
 [features]
 server = ["dep:log", "dep:syslog", "dep:chrono", "dep:colored",
   "dep:clap", "dep:lazy_static", "dep:mimalloc", "dep:fork", "broker-rpc"]
 broker = ["dep:log", "submap/digest", "dep:async-trait", "dep:unix-named-pipe", "dep:nix",
-  "dep:ipnetwork", "dep:triggered", "dep:parking_lot", "dep:tokio"]
+  "dep:ipnetwork", "dep:triggered", "dep:parking_lot", "dep:tokio", "dep:rustls",
+  "dep:futures-util", "dep:ws_stream_tungstenite", "dep:async-tungstenite",
+  "dep:tokio-util", "dep:tokio-rustls"]
 broker-rpc = ["broker", "rpc", "dep:rmp-serde"]
 ipc = ["dep:log", "dep:async-trait", "dep:parking_lot", "dep:tokio"]
 ipc-sync = ["dep:log", "dep:parking_lot", "dep:rtsc"]
@@ -71,12 +79,12 @@ rpc-sync = ["dep:rtsc", "dep:parking_lot", "dep:log", "dep:regex"]
 cli = ["ipc", "rpc", "dep:colored", "dep:clap", "dep:env_logger",
   "dep:bma-benchmark", "dep:prettytable-rs", "dep:hostname", "dep:hex",
   "dep:num-format", "dep:mimalloc", "dep:serde_json", "dep:is-terminal", "dep:rmp-serde"]
-openssl-vendored = []
 full = ["rpc", "ipc", "broker", "broker-rpc", "ipc-sync"]
 cursors = ["rpc", "dep:uuid"]
 std-alloc = []
 tracing = ["tokio/tracing", "dep:console-subscriber"]
 rt = ["dep:parking_lot_rt"]
+fips = [ "rustls/fips" ]
 #default = ["full"]
 
 [lib]
