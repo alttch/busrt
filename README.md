@@ -36,6 +36,7 @@ The following channels are supported:
 * async channels between threads/futures (Rust only)
 * UNIX sockets (local machine, Linux/BSD)
 * TCP sockets (Linux/BSD/Windows)
+* WebSockets (broker and async client only)
 
 In addition to Rust, BUS/RT has also bindings for the following languages:
 
