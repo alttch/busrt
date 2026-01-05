@@ -85,7 +85,9 @@ pub struct Config {
 }
 
 impl Config {
-    /// path - /path/to/socket (must end with .sock .socket or .ipc) or host:port,
+    /// path - /path/to/socket (must end with .sock .socket or .ipc) or host:port
+    /// for websockets use ws://host[:port] or wss://host[:port]
+    ///
     /// name - an unique client name
     pub fn new(path: &str, name: &str) -> Self {
         Self {

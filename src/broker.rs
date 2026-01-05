@@ -1477,6 +1477,7 @@ impl Broker {
         );
         Ok(())
     }
+    /// Spawn a websocket server at the given path (host:port)
     pub async fn spawn_websocket_server(
         &mut self,
         path: &str,
@@ -1514,9 +1515,22 @@ impl Broker {
                         tokio::spawn(async move {
                             macro_rules! prepare_and_handle {
                                 ($stream: expr) => {
+                                    let mut ws_config =
+                                        tungstenite::protocol::WebSocketConfig::default();
+                                    ws_config.read_buffer_size = config.buf_size;
+                                    ws_config.write_buffer_size = config.buf_size;
+                                    ws_config.max_write_buffer_size = config.buf_size * 2;
+                                    ws_config.max_message_size =
+                                        Some(usize::try_from(u32::MAX).unwrap());
+                                    ws_config.max_frame_size =
+                                        Some(usize::try_from(u32::MAX).unwrap());
+
                                     let (r, w) = match tokio::time::timeout(
                                         timeout,
-                                        async_tungstenite::tokio::accept_async($stream),
+                                        async_tungstenite::tokio::accept_async_with_config(
+                                            $stream,
+                                            Some(ws_config),
+                                        ),
                                     )
                                     .await
                                     {

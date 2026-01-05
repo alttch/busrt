@@ -1,6 +1,6 @@
 [package]
 name = "busrt"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 authors = ["Serhij S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -70,7 +70,7 @@ server = ["dep:log", "dep:syslog", "dep:chrono", "dep:colored",
 broker = ["dep:log", "submap/digest", "dep:async-trait", "dep:unix-named-pipe", "dep:nix",
   "dep:ipnetwork", "dep:triggered", "dep:parking_lot", "dep:tokio", "dep:rustls",
   "dep:futures-util", "dep:ws_stream_tungstenite", "dep:async-tungstenite",
-  "dep:tokio-util", "dep:tokio-rustls"]
+  "dep:tokio-util", "dep:tokio-rustls", "dep:tungstenite"]
 broker-rpc = ["broker", "rpc", "dep:rmp-serde"]
 ipc = ["dep:log", "dep:async-trait", "dep:parking_lot", "dep:tokio",
   "dep:rustls", "dep:futures-util", "dep:ws_stream_tungstenite",
