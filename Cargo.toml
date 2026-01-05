@@ -110,7 +110,7 @@ required-features = ["broker", "rpc"]
 
 [[example]]
 name = "broker_custom_rpc"
-required-features = ["broker", "rpc"]
+required-features = ["broker", "broker-rpc"]
 
 [[example]]
 name = "broker_aaa"
