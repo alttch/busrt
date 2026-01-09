@@ -392,7 +392,6 @@ dependencies = [
  "hostname 0.3.1",
  "ipnetwork",
  "is-terminal",
- "lazy_static",
  "log",
  "mimalloc",
  "nix 0.25.1",

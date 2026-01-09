@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate lazy_static;
-
 #[cfg(not(feature = "std-alloc"))]
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -10,7 +7,7 @@ use clap::Parser;
 use colored::Colorize;
 use log::{error, info, trace};
 use log::{Level, LevelFilter};
-use std::sync::atomic;
+use std::sync::{atomic, LazyLock};
 use std::time::Duration;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::Mutex;
@@ -23,11 +20,9 @@ use busrt::broker::{Broker, Options, ServerConfig};
 
 static SERVER_ACTIVE: atomic::AtomicBool = atomic::AtomicBool::new(true);
 
-lazy_static! {
-    static ref PID_FILE: Mutex<Option<String>> = Mutex::new(None);
-    static ref SOCK_FILES: Mutex<Vec<String>> = Mutex::new(Vec::new());
-    static ref BROKER: Mutex<Option<Broker>> = Mutex::new(None);
-}
+static PID_FILE: LazyLock<Mutex<Option<String>>> = LazyLock::new(<_>::default);
+static SOCK_FILES: LazyLock<Mutex<Vec<String>>> = LazyLock::new(<_>::default);
+static BROKER: LazyLock<Mutex<Option<Broker>>> = LazyLock::new(<_>::default);
 
 struct SimpleLogger;
 

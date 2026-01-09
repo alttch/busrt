@@ -357,7 +357,7 @@ async fn read_stdin() -> Vec<u8> {
     buf
 }
 
-async fn get_payload(candidate: &Option<String>) -> Vec<u8> {
+async fn get_payload(candidate: Option<&str>) -> Vec<u8> {
     if let Some(p) = candidate {
         p.as_bytes().to_vec()
     } else {
@@ -708,7 +708,7 @@ async fn main() {
         }
         Command::r#Send(ref cmd) => {
             let mut client = create_client(&opts, &client_name).await;
-            let payload = get_payload(&cmd.payload).await;
+            let payload = get_payload(cmd.payload.as_deref()).await;
             let fut = if cmd.target.contains(&['*', '?'][..]) {
                 client.send_broadcast(&cmd.target, payload.into(), QoS::Processed)
             } else {
@@ -719,7 +719,7 @@ async fn main() {
         }
         Command::Publish(ref cmd) => {
             let mut client = create_client(&opts, &client_name).await;
-            let payload = get_payload(&cmd.payload).await;
+            let payload = get_payload(cmd.payload.as_deref()).await;
             wto!(
                 wto!(client.publish(&cmd.topic, payload.into(), QoS::Processed))
                     .unwrap()
@@ -747,7 +747,7 @@ async fn main() {
                 }
                 RpcCommand::Notify(cmd) => {
                     let rpc = RpcClient::new(client, DummyHandlers {});
-                    let payload = get_payload(&cmd.payload).await;
+                    let payload = get_payload(cmd.payload.as_deref()).await;
                     wto!(
                         wto!(rpc.notify(&cmd.target, payload.into(), QoS::Processed))
                             .unwrap()
