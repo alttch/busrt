@@ -1478,6 +1478,7 @@ impl Broker {
         Ok(())
     }
     /// Spawn a websocket server at the given path (host:port)
+    #[allow(clippy::too_many_lines)]
     pub async fn spawn_websocket_server(
         &mut self,
         path: &str,

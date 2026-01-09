@@ -41,25 +41,22 @@ use log::{error, trace, warn};
 use async_trait::async_trait;
 
 type ResponseMap = Arc<Mutex<BTreeMap<u32, oneshot::Sender<Result<(), Error>>>>>;
+type WsWriteHalf = tokio_util::compat::Compat<
+    futures_util::io::WriteHalf<
+        WsStream<
+            async_tungstenite::stream::Stream<
+                TokioAdapter<TcpStream>,
+                TokioAdapter<tokio_rustls::client::TlsStream<TcpStream>>,
+            >,
+        >,
+    >,
+>;
 
 enum Writer {
     #[cfg(not(target_os = "windows"))]
     Unix(TtlBufWriter<unix::OwnedWriteHalf>),
     Tcp(TtlBufWriter<tcp::OwnedWriteHalf>),
-    WebSocket(
-        TtlBufWriter<
-            tokio_util::compat::Compat<
-                futures_util::io::WriteHalf<
-                    WsStream<
-                        async_tungstenite::stream::Stream<
-                            TokioAdapter<TcpStream>,
-                            TokioAdapter<tokio_rustls::client::TlsStream<TcpStream>>,
-                        >,
-                    >,
-                >,
-            >,
-        >,
-    ),
+    WebSocket(TtlBufWriter<WsWriteHalf>),
 }
 
 impl Writer {
@@ -259,6 +256,7 @@ impl Client {
     pub async fn connect_stream(stream: UnixStream, config: &Config) -> Result<Self, Error> {
         tokio::time::timeout(config.timeout, Self::connect_broker(config, Some(stream))).await?
     }
+    #[allow(clippy::too_many_lines)]
     async fn connect_broker(config: &Config, stream: Option<UnixStream>) -> Result<Self, Error> {
         let responses: ResponseMap = <_>::default();
         let connected = Arc::new(atomic::AtomicBool::new(true));
@@ -279,7 +277,7 @@ impl Client {
                         .map_err(Error::io)?,
                 );
                 if let Some(token) = &config.token {
-                    req = req.with_header("Authorization", format!("Bearer {}", token))
+                    req = req.with_header("Authorization", format!("Bearer {}", token));
                 }
 
                 let (ws_client, _) =
