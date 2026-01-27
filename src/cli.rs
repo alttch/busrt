@@ -505,6 +505,7 @@ async fn benchmark_rpc(
         rpcs.push(Arc::new(Mutex::new(rpc)));
         cnns.push(cname_null);
     }
+    warmup!();
     macro_rules! spawn_caller {
         ($rpc: expr, $target: expr, $method: expr, $payload: expr, $cr: expr) => {
             futs.push(tokio::spawn(async move {
@@ -790,7 +791,7 @@ async fn main() {
                 fnum!(cmd.iters / cmd.workers).bold(),
                 fnum!(cmd.payload_size).cyan()
             );
-            benchmark_client(
+            benchmark_rpc(
                 &opts,
                 &client_name,
                 cmd.iters,
@@ -798,7 +799,7 @@ async fn main() {
                 cmd.payload_size,
             )
             .await;
-            benchmark_rpc(
+            benchmark_client(
                 &opts,
                 &client_name,
                 cmd.iters,

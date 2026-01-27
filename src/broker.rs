@@ -1874,7 +1874,7 @@ impl Broker {
         timeout: Duration,
     ) -> Result<(), Error> {
         loop {
-            time::sleep(timeout).await;
+            time::sleep(timeout / 2).await;
             if tx.is_full() {
                 warn!("client {} queue is full, force unregistering", client_name);
                 return Err(Error::io("client queue overflow"));
@@ -1899,9 +1899,12 @@ impl Broker {
         R: AsyncReadExt + Unpin,
     {
         let client_name = &client.name;
+        let first_packet_timeout = timeout * 10 / 8; // +20% timeout for legacy clients
         loop {
             let mut header_buf = [0u8; 9];
-            if let Err(e) = time::timeout(timeout, reader.read_exact(&mut header_buf)).await? {
+            if let Err(e) =
+                time::timeout(first_packet_timeout, reader.read_exact(&mut header_buf)).await?
+            {
                 if e.kind() == std::io::ErrorKind::UnexpectedEof {
                     return Ok(());
                 } else {

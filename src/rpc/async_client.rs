@@ -315,7 +315,7 @@ impl RpcClient {
                         pfut.lock().abort();
                         break;
                     }
-                    tokio::time::sleep(t).await;
+                    tokio::time::sleep(t / 2).await;
                 }
             })
         });
