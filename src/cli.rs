@@ -435,7 +435,6 @@ async fn benchmark_client(
             }));
         };
     }
-    warmup!();
     for q in &[(QoS::No, "no"), (QoS::RealtimeProcessed, "processed")] {
         let qos = q.0;
         clear!();
