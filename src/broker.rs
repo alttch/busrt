@@ -1901,11 +1901,12 @@ impl Broker {
         let client_name = &client.name;
         loop {
             let mut header_buf = [0u8; 9];
-            let r_len = reader.read(&mut header_buf).await?;
-            if r_len == 0 {
-                return Ok(());
-            } else if r_len < 9 {
-                time::timeout(timeout, reader.read_exact(&mut header_buf[r_len..])).await??;
+            if let Err(e) = time::timeout(timeout, reader.read_exact(&mut header_buf)).await? {
+                if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                    return Ok(());
+                } else {
+                    return Err(e.into());
+                }
             }
             let flags = header_buf[4];
             if flags == 0 {
