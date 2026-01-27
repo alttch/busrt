@@ -700,8 +700,9 @@ async fn main() {
                     print_frame(&frame).await;
                 }
             });
-            let sleep_step = Duration::from_millis(100);
+            let sleep_step = Duration::from_millis(500);
             while client.is_connected() {
+                client.ping().await.ok();
                 sleep(sleep_step).await;
             }
             fut.abort();
