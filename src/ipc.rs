@@ -133,6 +133,28 @@ pub struct Client {
     secondary_counter: atomic::AtomicUsize,
 }
 
+struct FrameWriteGuard<'a> {
+    connected: &'a atomic::AtomicBool,
+    reader_fut: &'a JoinHandle<()>,
+    armed: bool,
+}
+
+impl FrameWriteGuard<'_> {
+    #[inline]
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for FrameWriteGuard<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            self.reader_fut.abort();
+            self.connected.store(false, atomic::Ordering::Relaxed);
+        }
+    }
+}
+
 // keep these as macros to insure inline and avoid unecc. futures
 
 macro_rules! prepare_frame_buf {
@@ -156,6 +178,8 @@ macro_rules! send_data_or_mark_disconnected {
                 }
             }
             Err(e) => {
+                $self.reader_fut.abort();
+                $self.connected.store(false, atomic::Ordering::Relaxed);
                 return Err(e.into());
             }
         }
@@ -173,8 +197,14 @@ macro_rules! send_frame_and_confirm {
         } else {
             None
         };
+        let mut frame_write_guard = FrameWriteGuard {
+            connected: &$self.connected,
+            reader_fut: &$self.reader_fut,
+            armed: true,
+        };
         send_data_or_mark_disconnected!($self, $buf, Flush::No);
         send_data_or_mark_disconnected!($self, $payload, $qos.is_realtime().into());
+        frame_write_guard.disarm();
         Ok(rx)
     }};
 }
@@ -653,4 +683,62 @@ where
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::AsyncClient;
+
+    #[cfg(not(target_os = "windows"))]
+    async fn fake_server_handshake(mut stream: UnixStream) {
+        let greetings = [
+            GREETINGS[0],
+            PROTOCOL_VERSION as u8,
+            (PROTOCOL_VERSION >> 8) as u8,
+        ];
+        stream.write_all(&greetings).await.unwrap();
+        let mut buf = [0_u8; 3];
+        stream.read_exact(&mut buf).await.unwrap();
+        stream.write_all(&[RESPONSE_OK]).await.unwrap();
+        let mut len_buf = [0_u8; 2];
+        stream.read_exact(&mut len_buf).await.unwrap();
+        let name_len = u16::from_le_bytes(len_buf) as usize;
+        let mut name = vec![0_u8; name_len];
+        stream.read_exact(&mut name).await.unwrap();
+        stream.write_all(&[RESPONSE_OK]).await.unwrap();
+        // Keep the socket open but stop reading. This forces the peer writer to block
+        // once the Unix socket buffer is full, letting the client-side timeout cancel
+        // an in-flight frame write.
+        tokio::time::sleep(Duration::from_secs(30)).await;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[tokio::test]
+    async fn write_timeout_mid_frame_marks_client_disconnected() {
+        let (client_stream, server_stream) = UnixStream::pair().unwrap();
+        tokio::spawn(fake_server_handshake(server_stream));
+
+        let config = Config::new("/tmp/busrt-test.ipc", "cancel-mid-frame-client")
+            .timeout(Duration::from_millis(1))
+            .buf_size(1024)
+            .buf_ttl(Duration::from_secs(60));
+
+        let mut client = Client::connect_stream(client_stream, &config)
+            .await
+            .unwrap();
+        let payload = vec![0x55; 128 * 1024 * 1024];
+        let result = client
+            .publish("TEST/TIMEOUT", Cow::Borrowed(&payload), QoS::No)
+            .await;
+
+        assert!(
+            result.is_err(),
+            "large write to non-reading peer must time out"
+        );
+        assert!(
+            !client.is_connected(),
+            "client must mark itself disconnected after a timeout/cancel during frame write"
+        );
+    }
 }
