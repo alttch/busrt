@@ -1,6 +1,6 @@
 [package]
 name = "busrt"
-version = "0.5.6"
+version = "0.5.7"
 edition = "2021"
 authors = ["Serhij S. <div@altertech.com>"]
 license = "Apache-2.0"
@@ -40,7 +40,7 @@ hex = { version = "0.4.3", optional = true }
 num-format = { version = "0.4.0", optional = true }
 serde-value = { version = "0.7.0", optional = true }
 is-terminal = { version = "0.4.17", optional = true }
-nix = { version = "0.25.0", optional = true }
+nix = { version = "0.31.3", default-features = false, features = ["time"], optional = true }
 ipnetwork = { version = "0.20.0", optional = true }
 triggered = { version = "0.1.2", optional = true }
 async-io = "2.6.0"
